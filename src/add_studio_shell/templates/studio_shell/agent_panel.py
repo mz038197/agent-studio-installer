@@ -23,6 +23,7 @@ SESSION_DIR = SHELL_ROOT / "sessions"
 SCRIPTS_DIR = SHELL_ROOT / "scripts"
 CHAT_IMAGE_DIR = SHELL_ROOT / "uploads" / "chat_images"
 AGENT_ACTIVATION_MARKER_PATH = SHELL_ROOT / ".agent_core_activated"
+USER_SETTINGS_PATH = WORKSPACE_DIR / "user_settings.json"
 MAX_CHAT_IMAGE_BYTES = 5 * 1024 * 1024
 TTS_VOICE_OPTIONS = [
     "alloy",
@@ -68,12 +69,105 @@ def _display_path(path: Path) -> str:
         return path.as_posix()
 
 
+def _ensure_workspace_dir() -> None:
+    WORKSPACE_DIR.mkdir(exist_ok=True)
+
+
 def _ensure_session_dir() -> None:
     SESSION_DIR.mkdir(exist_ok=True)
 
 
 def _ensure_chat_image_dir() -> None:
     CHAT_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _default_tts_preferences() -> dict[str, object]:
+    env = Settings.from_env()
+    return {
+        "tts_enabled": False,
+        "tts_voice": env.voice,
+        "tts_instructions": env.instructions,
+        "tts_speed": float(env.speed if env.speed is not None else 1.0),
+    }
+
+
+def _normalize_tts_preferences(
+    raw: dict[str, object],
+    defaults: dict[str, object],
+) -> dict[str, object]:
+    voice = str(raw.get("tts_voice", defaults["tts_voice"]))
+    if voice not in TTS_VOICE_OPTIONS:
+        voice = str(defaults["tts_voice"])
+
+    try:
+        speed = float(raw.get("tts_speed", defaults["tts_speed"]))
+    except (TypeError, ValueError):
+        speed = float(defaults["tts_speed"])
+    speed = max(MIN_TTS_SPEED, min(MAX_TTS_SPEED, speed))
+
+    return {
+        "tts_enabled": bool(raw.get("tts_enabled", defaults["tts_enabled"])),
+        "tts_voice": voice,
+        "tts_instructions": str(raw.get("tts_instructions", defaults["tts_instructions"])),
+        "tts_speed": speed,
+    }
+
+
+def _load_user_settings() -> dict[str, object]:
+    defaults = _default_tts_preferences()
+    if not USER_SETTINGS_PATH.exists():
+        return defaults
+
+    try:
+        with USER_SETTINGS_PATH.open(encoding="utf-8") as f:
+            raw = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return defaults
+
+    if not isinstance(raw, dict):
+        return defaults
+    return _normalize_tts_preferences(raw, defaults)
+
+
+def _save_user_settings(settings: dict[str, object]) -> None:
+    _ensure_workspace_dir()
+    payload = _normalize_tts_preferences(settings, _default_tts_preferences())
+    try:
+        USER_SETTINGS_PATH.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    except OSError:
+        return
+
+
+def _ensure_agent_panel_state() -> None:
+    if st.session_state.get("_studio_user_settings_loaded"):
+        return
+
+    prefs = _load_user_settings()
+    st.session_state.setdefault("studio_tts_enabled", prefs["tts_enabled"])
+    st.session_state.setdefault("studio_tts_voice", prefs["tts_voice"])
+    st.session_state.setdefault("studio_tts_instructions", prefs["tts_instructions"])
+    st.session_state.setdefault("studio_tts_speed", prefs["tts_speed"])
+    st.session_state["_studio_user_settings_loaded"] = True
+    st.session_state["_studio_user_settings_snapshot"] = dict(prefs)
+
+
+def _persist_tts_preferences_if_changed() -> None:
+    current = {
+        "tts_enabled": bool(st.session_state.get("studio_tts_enabled", False)),
+        "tts_voice": str(st.session_state.get("studio_tts_voice", "")),
+        "tts_instructions": str(st.session_state.get("studio_tts_instructions", "")),
+        "tts_speed": float(st.session_state.get("studio_tts_speed", 1.0)),
+    }
+    normalized = _normalize_tts_preferences(current, _default_tts_preferences())
+    previous = st.session_state.get("_studio_user_settings_snapshot")
+    if previous == normalized:
+        return
+
+    _save_user_settings(normalized)
+    st.session_state["_studio_user_settings_snapshot"] = dict(normalized)
 
 
 def studio_base_context(page_name: str = "") -> str:
@@ -346,6 +440,8 @@ def _restore_agent_core_if_possible(session_path: str) -> tuple[bool, str | None
 
 
 def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
+    _ensure_agent_panel_state()
+
     st.markdown('<div class="studio-agent-title-spacer"></div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="studio-agent-title-text">我的 Agent</div>',
@@ -437,48 +533,45 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
 
     with st.expander("技術資訊", expanded=False):
         st.caption(f"對話紀錄檔：`{current_session}`")
+        st.caption(f"語音設定檔：`{_display_path(USER_SETTINGS_PATH)}`")
         if page_name:
             st.caption(f"目前頁面：{page_name}")
 
-    default_tts_settings = Settings.from_env()
     voice_options = list(TTS_VOICE_OPTIONS)
-    if default_tts_settings.voice not in voice_options:
-        voice_options.insert(0, default_tts_settings.voice)
-    default_voice_index = voice_options.index(default_tts_settings.voice)
+    current_voice = str(st.session_state.get("studio_tts_voice", Settings.from_env().voice))
+    if current_voice not in voice_options:
+        voice_options.insert(0, current_voice)
 
     with st.expander("語音播放", expanded=False):
-        tts_enabled = st.checkbox(
+        st.checkbox(
             "語音播放",
-            value=False,
             key="studio_tts_enabled",
             help="開啟後，Agent 文字回答完成後會播放語音。",
         )
-        tts_voice = st.selectbox(
+        st.selectbox(
             "聲音",
             voice_options,
-            index=default_voice_index,
             format_func=_tts_voice_label,
             key="studio_tts_voice",
-            disabled=not tts_enabled,
+            disabled=not st.session_state["studio_tts_enabled"],
         )
-        tts_instructions = st.text_area(
+        st.text_area(
             "語氣指示 (TTS_INSTRUCTIONS)",
-            value=default_tts_settings.instructions,
             key="studio_tts_instructions",
             height=100,
-            disabled=not tts_enabled,
+            disabled=not st.session_state["studio_tts_enabled"],
         )
-        tts_speed = st.number_input(
+        st.number_input(
             "語速 (TTS_SPEED)",
             min_value=MIN_TTS_SPEED,
             max_value=MAX_TTS_SPEED,
-            value=default_tts_settings.speed if default_tts_settings.speed is not None else 1.0,
             step=0.05,
             format="%.2f",
             key="studio_tts_speed",
-            disabled=not tts_enabled,
+            disabled=not st.session_state["studio_tts_enabled"],
         )
         st.caption("文字回答完成後才開始 TTS；語音錯誤不會影響文字顯示。")
+        _persist_tts_preferences_if_changed()
 
     uploaded_image = st.file_uploader(
         "附加圖片（選填）",
@@ -534,12 +627,12 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
                 answer_parts: list[str] = []
                 tts_settings = (
                     replace(
-                        default_tts_settings,
-                        voice=tts_voice,
-                        instructions=tts_instructions.strip(),
-                        speed=float(tts_speed),
+                        Settings.from_env(),
+                        voice=str(st.session_state["studio_tts_voice"]),
+                        instructions=str(st.session_state["studio_tts_instructions"]).strip(),
+                        speed=float(st.session_state["studio_tts_speed"]),
                     )
-                    if tts_enabled
+                    if st.session_state["studio_tts_enabled"]
                     else None
                 )
 
@@ -561,7 +654,7 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
                     placeholder.error(final_text)
                 else:
                     answer = "".join(answer_parts).strip() or final_text.strip()
-                    if tts_enabled and tts_settings is not None and answer:
+                    if st.session_state["studio_tts_enabled"] and tts_settings is not None and answer:
                         try:
                             stream_tts_play(answer, tts_settings)
                         except Exception as exc:
