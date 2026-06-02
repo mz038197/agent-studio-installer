@@ -56,6 +56,34 @@ After installation:
 uv run streamlit run studio_shell/app.py
 ```
 
+## TTS settings
+
+The right-side Agent panel reads and writes TTS preferences at:
+
+```text
+studio_shell/workspace/user_settings.json
+```
+
+The file is created automatically with defaults when the panel opens. It uses these keys:
+
+```json
+{
+  "tts_enabled": false,
+  "tts_voice": "nova",
+  "tts_instructions": "用台灣繁體中文說話。",
+  "tts_speed": 1.0
+}
+```
+
+Settings are loaded in this order:
+
+1. `studio_shell/workspace/user_settings.json`
+2. `.env` values read by `openai-tts` (`TTS_VOICE`, `TTS_INSTRUCTIONS`, `TTS_SPEED`)
+3. `openai-tts` built-in defaults
+
+Use the **重新載入設定** button in the TTS panel after manually editing `user_settings.json`.
+The TTS panel is available even before Agent Core is connected.
+
 ## Classroom exercises
 
 See `docs/exercises.md` in this repo for guided left-column + Agent context practice.

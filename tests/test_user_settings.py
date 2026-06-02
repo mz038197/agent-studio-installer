@@ -1,9 +1,58 @@
 from __future__ import annotations
 
 import json
+import sys
+import types
+from importlib import util
 from pathlib import Path
 
 import pytest
+
+
+class _FakeSettings:
+    voice = "nova"
+    instructions = "default instructions"
+    speed = None
+
+    @classmethod
+    def from_env(cls):
+        return cls()
+
+
+def _load_agent_panel_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    fake_streamlit = types.SimpleNamespace(session_state={})
+    fake_dotenv = types.SimpleNamespace(load_dotenv=lambda *_args, **_kwargs: None)
+    fake_openai_tts = types.SimpleNamespace(
+        Settings=_FakeSettings,
+        stream_tts_play=lambda *_args, **_kwargs: None,
+    )
+    fake_openai_tts_settings = types.SimpleNamespace(
+        MIN_TTS_SPEED=0.25,
+        MAX_TTS_SPEED=4.0,
+    )
+
+    monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
+    monkeypatch.setitem(sys.modules, "dotenv", fake_dotenv)
+    monkeypatch.setitem(sys.modules, "openai_tts", fake_openai_tts)
+    monkeypatch.setitem(sys.modules, "openai_tts.settings", fake_openai_tts_settings)
+
+    module_path = (
+        Path(__file__).parents[1]
+        / "src"
+        / "add_studio_shell"
+        / "templates"
+        / "studio_shell"
+        / "agent_panel.py"
+    )
+    spec = util.spec_from_file_location("agent_panel_under_test", module_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    monkeypatch.setattr(module, "WORKSPACE_DIR", tmp_path / "workspace")
+    monkeypatch.setattr(module, "USER_SETTINGS_PATH", tmp_path / "workspace" / "user_settings.json")
+    return module
 
 
 def _normalize_tts_preferences(
@@ -87,3 +136,31 @@ def test_user_settings_invalid_voice_falls_back_to_default(tmp_path: Path) -> No
     )
     assert normalized["tts_voice"] == "nova"
     assert normalized["tts_speed"] == 1.0
+
+
+def test_agent_panel_creates_default_user_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    module = _load_agent_panel_module(monkeypatch, tmp_path)
+
+    message = module._ensure_user_settings_file()
+
+    assert message is None
+    payload = json.loads((tmp_path / "workspace" / "user_settings.json").read_text(encoding="utf-8"))
+    assert payload == {
+        "tts_enabled": False,
+        "tts_voice": "nova",
+        "tts_instructions": "default instructions",
+        "tts_speed": 1.0,
+    }
+
+
+def test_agent_panel_save_user_settings_reports_write_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = _load_agent_panel_module(monkeypatch, tmp_path)
+    monkeypatch.setattr(module, "_ensure_workspace_dir", lambda: (_ for _ in ()).throw(OSError("no access")))
+
+    message = module._save_user_settings({"tts_voice": "nova"})
+
+    assert message is not None
+    assert "無法寫入語音設定檔" in message
