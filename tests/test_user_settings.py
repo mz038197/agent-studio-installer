@@ -159,6 +159,24 @@ def test_agent_panel_creates_default_user_settings(monkeypatch: pytest.MonkeyPat
     }
 
 
+def test_agent_panel_repairs_empty_user_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    module = _load_agent_panel_module(monkeypatch, tmp_path)
+    settings_path = tmp_path / "workspace" / "user_settings.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text("", encoding="utf-8")
+
+    message = module._ensure_user_settings_file()
+
+    assert message is None
+    payload = json.loads(settings_path.read_text(encoding="utf-8"))
+    assert payload == {
+        "tts_enabled": False,
+        "tts_voice": "nova",
+        "tts_instructions": "default instructions",
+        "tts_speed": 1.0,
+    }
+
+
 def test_agent_panel_save_user_settings_reports_write_errors(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -216,7 +234,7 @@ def test_sync_tts_preferences_for_page_reloads_on_page_change(
     assert session_state["_studio_tts_page_name"] == "Playground"
 
 
-def test_sync_tts_preferences_for_page_skips_reload_on_same_page(
+def test_sync_tts_preferences_for_page_reloads_from_file_on_same_page(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -245,8 +263,51 @@ def test_sync_tts_preferences_for_page_skips_reload_on_same_page(
 
     module._sync_tts_preferences_for_page("Home")
 
-    assert session_state["studio_tts_voice"] == "nova"
-    assert session_state["studio_tts_instructions"] == "in progress"
+    assert session_state["studio_tts_voice"] == "alloy"
+    assert session_state["studio_tts_instructions"] == "from file"
+    assert session_state["studio_tts_speed"] == 1.5
+
+
+def test_sync_tts_preferences_persists_pending_widget_changes_before_reload(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = _load_agent_panel_module(monkeypatch, tmp_path)
+    settings_path = tmp_path / "workspace" / "user_settings.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(
+        json.dumps(
+            {
+                "tts_enabled": True,
+                "tts_voice": "alloy",
+                "tts_instructions": "from file",
+                "tts_speed": 1.5,
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    session_state = module.st.session_state
+    session_state["_studio_tts_page_name"] = "Home"
+    session_state["_studio_user_settings_snapshot"] = {
+        "tts_enabled": True,
+        "tts_voice": "alloy",
+        "tts_instructions": "from file",
+        "tts_speed": 1.5,
+    }
+    session_state["studio_tts_enabled"] = True
+    session_state["studio_tts_voice"] = "alloy"
+    session_state["studio_tts_instructions"] = "changed in widget"
+    session_state["studio_tts_speed"] = 1.25
+
+    module._sync_tts_preferences_for_page("Home")
+
+    payload = json.loads(settings_path.read_text(encoding="utf-8"))
+    assert payload["tts_instructions"] == "changed in widget"
+    assert payload["tts_speed"] == 1.25
+    assert session_state["studio_tts_instructions"] == "changed in widget"
+    assert session_state["studio_tts_speed"] == 1.25
 
 
 def test_assistant_reply_is_saved_before_tts_playback() -> None:
