@@ -1,0 +1,71 @@
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$Source
+)
+
+$ErrorActionPreference = "Stop"
+
+$sourcePath = (Resolve-Path -LiteralPath $Source).Path
+$sourceName = Split-Path -Leaf $sourcePath
+
+if ($sourceName -ne "studio_shell") {
+    throw "Source must be a studio_shell folder. Got: $sourcePath"
+}
+
+$projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
+$templateRoot = Join-Path $projectRoot "src\add_studio_shell\templates"
+$destination = Join-Path $templateRoot "studio_shell"
+
+if (-not (Test-Path -LiteralPath (Join-Path $sourcePath "app.py"))) {
+    throw "Source is missing app.py: $sourcePath"
+}
+
+if (-not (Test-Path -LiteralPath (Join-Path $sourcePath "agent_panel.py"))) {
+    throw "Source is missing agent_panel.py: $sourcePath"
+}
+
+if (Test-Path -LiteralPath $destination) {
+    Remove-Item -LiteralPath $destination -Recurse -Force
+}
+
+New-Item -ItemType Directory -Path $templateRoot -Force | Out-Null
+Copy-Item -LiteralPath $sourcePath -Destination $destination -Recurse -Force
+
+Get-ChildItem -LiteralPath (Join-Path $destination "workspace") -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -ne ".gitkeep" } |
+    Remove-Item -Force
+
+Get-ChildItem -LiteralPath (Join-Path $destination "sessions") -Filter "*.jsonl" -File -ErrorAction SilentlyContinue |
+    Remove-Item -Force
+
+if (Test-Path -LiteralPath (Join-Path $destination "uploads")) {
+    Remove-Item -LiteralPath (Join-Path $destination "uploads") -Recurse -Force
+}
+
+if (Test-Path -LiteralPath (Join-Path $destination "scripts")) {
+    Remove-Item -LiteralPath (Join-Path $destination "scripts") -Recurse -Force
+}
+
+Get-ChildItem -LiteralPath $destination -Directory -Filter "__pycache__" -Recurse -ErrorAction SilentlyContinue |
+    Remove-Item -Recurse -Force
+
+$runtimeMarker = Join-Path $destination ".agent_core_activated"
+if (Test-Path -LiteralPath $runtimeMarker) {
+    Remove-Item -LiteralPath $runtimeMarker -Force
+}
+
+foreach ($folder in @("workspace", "sessions", "scripts")) {
+    $folderPath = Join-Path $destination $folder
+    if (-not (Test-Path -LiteralPath $folderPath)) {
+        New-Item -ItemType Directory -Path $folderPath -Force | Out-Null
+    }
+
+    $gitkeep = Join-Path $folderPath ".gitkeep"
+    if (-not (Test-Path -LiteralPath $gitkeep)) {
+        New-Item -ItemType File -Path $gitkeep -Force | Out-Null
+    }
+}
+
+Write-Host "Synced studio_shell template."
+Write-Host "Source:      $sourcePath"
+Write-Host "Destination: $destination"
