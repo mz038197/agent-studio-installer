@@ -164,3 +164,80 @@ def test_agent_panel_save_user_settings_reports_write_errors(
 
     assert message is not None
     assert "無法寫入語音設定檔" in message
+
+
+def test_should_reload_tts_for_page(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    module = _load_agent_panel_module(monkeypatch, tmp_path)
+
+    assert module._should_reload_tts_for_page(None, "Home") is True
+    assert module._should_reload_tts_for_page("Home", "Home") is False
+    assert module._should_reload_tts_for_page("Home", "Playground") is True
+
+
+def test_sync_tts_preferences_for_page_reloads_on_page_change(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = _load_agent_panel_module(monkeypatch, tmp_path)
+    settings_path = tmp_path / "workspace" / "user_settings.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(
+        json.dumps(
+            {
+                "tts_enabled": True,
+                "tts_voice": "alloy",
+                "tts_instructions": "from file",
+                "tts_speed": 1.5,
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    session_state = module.st.session_state
+    session_state["_studio_tts_page_name"] = "Home"
+    session_state["studio_tts_enabled"] = False
+    session_state["studio_tts_voice"] = "nova"
+    session_state["studio_tts_instructions"] = "stale"
+    session_state["studio_tts_speed"] = 1.0
+
+    module._sync_tts_preferences_for_page("Playground")
+
+    assert session_state["studio_tts_enabled"] is True
+    assert session_state["studio_tts_voice"] == "alloy"
+    assert session_state["studio_tts_instructions"] == "from file"
+    assert session_state["studio_tts_speed"] == 1.5
+    assert session_state["_studio_tts_page_name"] == "Playground"
+
+
+def test_sync_tts_preferences_for_page_skips_reload_on_same_page(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = _load_agent_panel_module(monkeypatch, tmp_path)
+    settings_path = tmp_path / "workspace" / "user_settings.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(
+        json.dumps(
+            {
+                "tts_enabled": True,
+                "tts_voice": "alloy",
+                "tts_instructions": "from file",
+                "tts_speed": 1.5,
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    session_state = module.st.session_state
+    session_state["_studio_tts_page_name"] = "Home"
+    session_state["studio_tts_enabled"] = False
+    session_state["studio_tts_voice"] = "nova"
+    session_state["studio_tts_instructions"] = "in progress"
+    session_state["studio_tts_speed"] = 1.0
+
+    module._sync_tts_preferences_for_page("Home")
+
+    assert session_state["studio_tts_voice"] == "nova"
+    assert session_state["studio_tts_instructions"] == "in progress"

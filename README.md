@@ -82,6 +82,7 @@ Settings are loaded in this order:
 3. `openai-tts` built-in defaults
 
 Use the **重新載入設定** button in the TTS panel after manually editing `user_settings.json`.
+Switching Streamlit pages also reloads TTS preferences from `user_settings.json`.
 The TTS panel is available even before Agent Core is connected.
 
 ## Classroom exercises

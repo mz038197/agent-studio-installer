@@ -148,17 +148,19 @@ def _ensure_user_settings_file() -> str | None:
     return _save_user_settings(_default_tts_preferences())
 
 
-def _ensure_agent_panel_state() -> None:
-    if st.session_state.get("_studio_user_settings_loaded"):
-        return
+def _should_reload_tts_for_page(last_page: str | None, page_name: str) -> bool:
+    return last_page != page_name
 
-    prefs = _load_user_settings()
-    st.session_state.setdefault("studio_tts_enabled", prefs["tts_enabled"])
-    st.session_state.setdefault("studio_tts_voice", prefs["tts_voice"])
-    st.session_state.setdefault("studio_tts_instructions", prefs["tts_instructions"])
-    st.session_state.setdefault("studio_tts_speed", prefs["tts_speed"])
-    st.session_state["_studio_user_settings_loaded"] = True
-    st.session_state["_studio_user_settings_snapshot"] = dict(prefs)
+
+def _sync_tts_preferences_for_page(page_name: str) -> str | None:
+    settings_error = _ensure_user_settings_file()
+    last_page = st.session_state.get("_studio_tts_page_name")
+    if not _should_reload_tts_for_page(last_page, page_name):
+        return settings_error
+
+    _reload_tts_preferences_from_file()
+    st.session_state["_studio_tts_page_name"] = page_name
+    return settings_error
 
 
 def _reload_tts_preferences_from_file() -> None:
@@ -189,8 +191,8 @@ def _persist_tts_preferences_if_changed() -> str | None:
     return None
 
 
-def _render_tts_settings() -> None:
-    settings_error = _ensure_user_settings_file()
+def _render_tts_settings(*, page_name: str = "") -> None:
+    settings_error = _sync_tts_preferences_for_page(page_name)
     if settings_error:
         st.warning(settings_error)
 
@@ -508,8 +510,6 @@ def _restore_agent_core_if_possible(session_path: str) -> tuple[bool, str | None
 
 
 def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
-    _ensure_agent_panel_state()
-
     st.markdown('<div class="studio-agent-title-spacer"></div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="studio-agent-title-text">我的 Agent</div>',
@@ -576,7 +576,7 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
             _reset_session_picker_widget()
             st.rerun()
 
-    _render_tts_settings()
+    _render_tts_settings(page_name=page_name)
 
     current_session = st.session_state.get("session_path")
     if not current_session:
