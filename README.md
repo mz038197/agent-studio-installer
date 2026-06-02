@@ -81,8 +81,8 @@ Settings are loaded in this order:
 2. `.env` values read by `openai-tts` (`TTS_VOICE`, `TTS_INSTRUCTIONS`, `TTS_SPEED`)
 3. `openai-tts` built-in defaults
 
-Use the **重新載入設定** button in the TTS panel after manually editing `user_settings.json`.
-Switching Streamlit pages also reloads TTS preferences from `user_settings.json`.
+Switching Streamlit pages reloads TTS preferences from `user_settings.json`.
+After manually editing that file, switch to another page and back, or restart the Streamlit session.
 The TTS panel is available even before Agent Core is connected.
 
 ## Classroom exercises

@@ -191,8 +191,11 @@ def _persist_tts_preferences_if_changed() -> str | None:
     return None
 
 
-def _render_tts_settings(*, page_name: str = "") -> None:
-    settings_error = _sync_tts_preferences_for_page(page_name)
+def _prepare_tts_preferences(page_name: str) -> str | None:
+    return _sync_tts_preferences_for_page(page_name)
+
+
+def _render_tts_settings_ui(*, settings_error: str | None = None) -> None:
     if settings_error:
         st.warning(settings_error)
 
@@ -203,9 +206,6 @@ def _render_tts_settings(*, page_name: str = "") -> None:
 
     with st.expander("語音播放", expanded=False):
         st.caption(f"語音設定檔：`{_display_path(USER_SETTINGS_PATH)}`")
-        if st.button("重新載入設定", key="studio_reload_user_settings"):
-            _reload_tts_preferences_from_file()
-            st.rerun()
 
         st.checkbox(
             "語音播放",
@@ -576,7 +576,7 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
             _reset_session_picker_widget()
             st.rerun()
 
-    _render_tts_settings(page_name=page_name)
+    settings_error = _prepare_tts_preferences(page_name)
 
     current_session = st.session_state.get("session_path")
     if not current_session:
@@ -598,6 +598,7 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
                 st.rerun()
             else:
                 st.error(message)
+        _render_tts_settings_ui(settings_error=settings_error)
         st.chat_input("請先啟用 Agent...", disabled=True, key="studio_chat_not_activated")
         return
 
@@ -606,6 +607,8 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
         st.caption(f"語音設定檔：`{_display_path(USER_SETTINGS_PATH)}`")
         if page_name:
             st.caption(f"目前頁面：{page_name}")
+
+    _render_tts_settings_ui(settings_error=settings_error)
 
     uploaded_image = st.file_uploader(
         "附加圖片（選填）",
