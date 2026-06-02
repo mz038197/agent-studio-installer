@@ -16,10 +16,11 @@
 
 ## 練習 1 · 心情儀表板（Playground 頁）
 
-**左欄：** 心情 radio、能量 slider、今日事件  
+**左欄：** 心情 radio、能量 slider、今日事件（UI 已提供）  
+**你要做：** 在 `pages/2_Playground.py` 的 `render_main()` 用 `format_extra_context` 組摘要並 `return`（對照 Home 頁範例）  
 **右欄示例：** 「根據我的心情和能量，給我三個放鬆建議。」
 
-**驗收：** 改心情或能量 → 建議內容不同。
+**驗收：** 接線後，改心情或能量 → 建議內容不同；接線前右欄不會讀到左欄狀態。
 
 ---
 

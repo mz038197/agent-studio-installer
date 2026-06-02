@@ -33,7 +33,7 @@ def overview() -> None:
 
 ### 建議流程
 1. 完成 `agent_core.py`
-2. 到 **Playground** 看左欄 → 右欄接線示例
+2. 在 **Home** 確認接線已通，再到 **Playground** 自己完成 extra context 接線
 3. 修改或新增 `pages/` 練習自己的 UI
 """
         )
