@@ -689,14 +689,14 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
                         )
                 except Exception as exc:
                     final_text = f"Agent 執行時發生錯誤：`{exc}`"
+                    answer = final_text
                     placeholder.error(final_text)
                 else:
                     answer = "".join(answer_parts).strip() or final_text.strip()
-                    if st.session_state["studio_tts_enabled"] and tts_settings is not None and answer:
-                        try:
-                            stream_tts_play(answer, tts_settings)
-                        except Exception as exc:
-                            st.warning(f"語音播放發生錯誤，文字回答已保留：`{exc}`")
 
-        answer = "".join(answer_parts).strip() or final_text
-        st.session_state["studio_chat_history"].append(("assistant", answer))
+                st.session_state["studio_chat_history"].append(("assistant", answer))
+                if st.session_state["studio_tts_enabled"] and tts_settings is not None and answer:
+                    try:
+                        stream_tts_play(answer, tts_settings)
+                    except Exception as exc:
+                        st.warning(f"語音播放發生錯誤，文字回答已保留：`{exc}`")

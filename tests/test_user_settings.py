@@ -241,3 +241,20 @@ def test_sync_tts_preferences_for_page_skips_reload_on_same_page(
 
     assert session_state["studio_tts_voice"] == "nova"
     assert session_state["studio_tts_instructions"] == "in progress"
+
+
+def test_assistant_reply_is_saved_before_tts_playback() -> None:
+    source = (
+        Path(__file__).parents[1]
+        / "src"
+        / "add_studio_shell"
+        / "templates"
+        / "studio_shell"
+        / "agent_panel.py"
+    ).read_text(encoding="utf-8")
+    user_message_flow = source.split('if user_text := st.chat_input("詢問 Agent...", key="studio_chat"):', 1)[1]
+
+    save_index = user_message_flow.index('st.session_state["studio_chat_history"].append(("assistant", answer))')
+    tts_index = user_message_flow.index("stream_tts_play(answer, tts_settings)")
+
+    assert save_index < tts_index
