@@ -217,13 +217,13 @@ def _render_tts_settings_ui(*, settings_error: str | None = None) -> None:
             voice_options,
             format_func=_tts_voice_label,
             key="studio_tts_voice",
-            disabled=not st.session_state["studio_tts_enabled"],
+            disabled=not st.session_state.get("studio_tts_enabled", False),
         )
         st.text_area(
             "語氣指示 (TTS_INSTRUCTIONS)",
             key="studio_tts_instructions",
             height=100,
-            disabled=not st.session_state["studio_tts_enabled"],
+            disabled=not st.session_state.get("studio_tts_enabled", False),
         )
         st.number_input(
             "語速 (TTS_SPEED)",
@@ -232,7 +232,7 @@ def _render_tts_settings_ui(*, settings_error: str | None = None) -> None:
             step=0.05,
             format="%.2f",
             key="studio_tts_speed",
-            disabled=not st.session_state["studio_tts_enabled"],
+            disabled=not st.session_state.get("studio_tts_enabled", False),
         )
         st.caption("文字回答完成後才開始 TTS；語音錯誤不會影響文字顯示。")
         persist_error = _persist_tts_preferences_if_changed()
@@ -581,6 +581,7 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
     current_session = st.session_state.get("session_path")
     if not current_session:
         st.caption("尚無對話紀錄，請按 **+** 新增對話。")
+        _render_tts_settings_ui(settings_error=settings_error)
         st.chat_input("詢問...", disabled=True, key="studio_chat_no_session")
         return
 
