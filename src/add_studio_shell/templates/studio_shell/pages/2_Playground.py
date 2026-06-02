@@ -48,32 +48,32 @@ def render_main() -> str:
     st.caption("試著請 Agent 在 `pages/2_Playground.py` 加一個「-1」按鈕。")
 
     st.divider()
-    st.markdown("#### 接線練習 · extra context")
+    st.markdown("#### 接線練習 · 用 Prompt 請 Agent 串接 Extra Context")
     st.info(
-        "右欄 Agent **看不到**左欄的 widget，只會收到你在 `render_main()` **最後 `return` 的字串**。"
-        "請把左欄選擇組成摘要，傳給右欄。完整範例可對照 `pages/1_Home.py`。"
+        "右欄 Agent 一開始還不一定知道左欄的暱稱、心情、能量、今日事件和計數器。"
+        "你的任務是用清楚的 Prompt，請右欄 Agent 幫你把左欄資訊透過 Extra Context 串接過去。"
     )
 
-    with st.expander("需要提示？接線三步驟", expanded=True):
+    with st.expander("可以這樣跟右欄 Agent 說", expanded=True):
         st.markdown(
             """
-1. 在檔案上方加入：`from studio_shell.shell_ui import format_extra_context`
-2. 在 `render_main()` 裡用 `format_extra_context("Playground", 心情=..., 能量=..., ...)` 組摘要
-3. 用 `st.code(extra)` 顯示「給 Agent 的摘要」，並 **`return extra`**
+先試試短版 Prompt：
 
-接線骨架（請貼到本函式下方、取代最後的 `return ""`）：
+```text
+請用 Extra Context 的方式，將 Playground 左邊欄位的暱稱、心情、能量、今日事件、計數器，串接到右邊欄位的 Agent。
+```
 
-```python
-extra = format_extra_context(
-    "Playground",
-    暱稱=nickname or "（未填）",
-    心情=mood,
-    能量=f"{energy}/10",
-    今日事件=event or "（未填）",
-    計數器=st.session_state.playground_count,
-)
-st.code(extra, language="text")
-return extra
+如果 Agent 沒有改完整，可以改用更明確的版本：
+
+```text
+請修改 `pages/2_Playground.py`，讓 `render_main()` 把左欄的暱稱、心情、能量、今日事件、計數器整理成 Extra Context，並回傳給右欄 Agent。
+
+請參考 `pages/1_Home.py` 的寫法：
+- 使用 `format_extra_context`
+- 在畫面上顯示「給 Agent 的摘要」
+- 最後 `return` 這段摘要
+
+請不要修改 `studio_shell/agent_panel.py` 或 `studio_shell/page_shell.py`。
 ```
 """
         )
@@ -96,6 +96,8 @@ return extra
     st.markdown("#### 右欄可以這樣問")
     st.markdown(
         """
+接線完成後，改一下左欄的心情或能量，然後在右欄問：
+
 - 「根據我的心情和能量，給我三個今晚可以放鬆的建議。」
 - 「用鼓勵的語氣寫一段 50 字給我，不要說教。」
 
@@ -103,13 +105,13 @@ return extra
 """
     )
 
-    # TODO: 練習 1 — 接上 extra context（參考 1_Home.py），再 return 摘要字串
+    # TODO: 練習 1 — 用右欄 Prompt 請 Agent 接上 Extra Context，再 return 摘要字串
     return ""
 
 
 page_shell(
     "Playground",
-    "練習把左欄狀態用 extra context 傳給右欄 Agent（請在本頁 `render_main` 完成接線）。",
+    "練習用 Prompt 請右欄 Agent 把左欄狀態透過 Extra Context 串接過去。",
     render_main,
     page_name="Playground",
 )
