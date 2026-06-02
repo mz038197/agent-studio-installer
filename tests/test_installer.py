@@ -14,6 +14,7 @@ def test_install_shell_copies_template_without_agent_core(tmp_path: Path) -> Non
     assert (result.target / "agent_panel.py").exists()
     assert (result.target / "page_shell.py").exists()
     assert (result.target / "pages" / "2_Playground.py").exists()
+    assert (result.target / "pages" / "3_UI_Cheatsheet.py").exists()
     assert (result.target / "workspace" / ".gitkeep").exists()
     assert (result.target / "sessions" / ".gitkeep").exists()
     assert (result.target / "scripts" / ".gitkeep").exists()

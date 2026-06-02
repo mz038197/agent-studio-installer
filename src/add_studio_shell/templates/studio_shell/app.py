@@ -34,7 +34,8 @@ def overview() -> None:
 ### 建議流程
 1. 完成 `agent_core.py`
 2. 在 **Home** 確認接線已通，再到 **Playground** 自己完成 extra context 接線
-3. 修改或新增 `pages/` 練習自己的 UI
+3. 到 **UI 元件詞彙表** 找元件名稱，練習把元件名稱放進 Prompt
+4. 修改或新增 `pages/` 練習自己的 UI
 """
         )
         st.info("詳細練習題見 `docs/exercises.md`（若已安裝在專案中）。")
@@ -53,6 +54,7 @@ pages = {
         st.Page(overview, title="總覽", default=True),
         st.Page(str(SHELL_ROOT / "pages" / "1_Home.py"), title="Home"),
         st.Page(str(SHELL_ROOT / "pages" / "2_Playground.py"), title="Playground"),
+        st.Page(str(SHELL_ROOT / "pages" / "3_UI_Cheatsheet.py"), title="UI 元件詞彙表"),
     ],
 }
 
