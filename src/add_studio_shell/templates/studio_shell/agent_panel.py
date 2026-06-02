@@ -82,7 +82,7 @@ def _ensure_chat_image_dir() -> None:
 
 
 def _default_tts_preferences() -> dict[str, object]:
-    env = Settings.from_env()
+    env = Settings()
     return {
         "tts_enabled": False,
         "tts_voice": env.voice,
@@ -200,7 +200,7 @@ def _render_tts_settings_ui(*, settings_error: str | None = None) -> None:
         st.warning(settings_error)
 
     voice_options = list(TTS_VOICE_OPTIONS)
-    current_voice = str(st.session_state.get("studio_tts_voice", Settings.from_env().voice))
+    current_voice = str(st.session_state.get("studio_tts_voice", Settings().voice))
     if current_voice not in voice_options:
         voice_options.insert(0, current_voice)
 
