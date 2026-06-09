@@ -87,3 +87,48 @@ def test_create_agent_for_session_rejects_invalid_name(
 
     with pytest.raises(RuntimeError, match="對話紀錄無效"):
         module._create_agent_for_session("../escape.jsonl")
+
+
+def test_ensure_valid_current_session_clears_stale_name_when_no_sessions(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = _load_agent_panel_module(monkeypatch)
+    session_dir = tmp_path / "sessions"
+    session_dir.mkdir(parents=True)
+    monkeypatch.setattr(module, "SESSION_DIR", session_dir)
+    module.st.session_state["session_name"] = "session_missing.jsonl"
+
+    assert module._ensure_valid_current_session([]) is None
+    assert "session_name" not in module.st.session_state
+
+
+def test_new_session_can_be_created_after_all_sessions_removed(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = _load_agent_panel_module(monkeypatch)
+    session_dir = tmp_path / "sessions"
+    session_dir.mkdir(parents=True)
+    monkeypatch.setattr(module, "SESSION_DIR", session_dir)
+    monkeypatch.setattr(module, "_ensure_peas_dirs", lambda: None)
+
+    assert module._ensure_valid_current_session([]) is None
+    module._set_current_session(module._new_session_path())
+
+    assert module.st.session_state["session_name"].endswith(".jsonl")
+    assert (session_dir / module.st.session_state["session_name"]).is_file()
+
+
+def test_render_chat_panel_avoids_empty_selectbox() -> None:
+    source = (
+        Path(__file__).parents[1]
+        / "src"
+        / "add_studio_shell"
+        / "templates"
+        / "studio_shell"
+        / "agent_panel.py"
+    ).read_text(encoding="utf-8")
+    toolbar = source.split("pick_col, new_col, del_col = st.columns([6, 1, 1])", 1)[1]
+    assert "if ids:" in toolbar
+    assert toolbar.index("if ids:") < toolbar.index("pick_col.selectbox")

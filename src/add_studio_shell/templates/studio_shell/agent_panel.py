@@ -622,23 +622,24 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
         ids.insert(0, current_session)
         labels[current_session] = "剛剛 · 目前對話"
 
-    picker_key = f"session_picker_{st.session_state.get('session_picker_version', 0)}"
-    selected_index = ids.index(current_session) if current_session in ids else 0
-
     pick_col, new_col, del_col = st.columns([6, 1, 1])
-    picked_id = pick_col.selectbox(
-        "對話紀錄",
-        ids,
-        index=selected_index,
-        format_func=lambda value: labels.get(value, value),
-        disabled=not ids,
-        label_visibility="collapsed",
-        key=picker_key,
-    )
-    resolved_pick = _resolve_session_picker_value(picked_id, labels)
-    if resolved_pick and resolved_pick != current_session:
-        _set_current_session(SESSION_DIR / resolved_pick)
-        st.rerun()
+    if ids:
+        picker_key = f"session_picker_{st.session_state.get('session_picker_version', 0)}"
+        selected_index = ids.index(current_session) if current_session in ids else 0
+        picked_id = pick_col.selectbox(
+            "對話紀錄",
+            ids,
+            index=selected_index,
+            format_func=lambda value: labels.get(value, value),
+            label_visibility="collapsed",
+            key=picker_key,
+        )
+        resolved_pick = _resolve_session_picker_value(picked_id, labels)
+        if resolved_pick and resolved_pick != current_session:
+            _set_current_session(SESSION_DIR / resolved_pick)
+            st.rerun()
+    else:
+        pick_col.caption("尚無對話紀錄")
     if new_col.button("", icon=":material/add:", help="新增對話", use_container_width=True):
         _set_current_session(_new_session_path())
         _reset_session_picker_widget()
@@ -662,6 +663,9 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
             remaining = _list_sessions()
             if remaining:
                 _set_current_session(remaining[0])
+            else:
+                _clear_agent_cache()
+                _remove_activation_marker()
             _reset_session_picker_widget()
             st.rerun()
 
