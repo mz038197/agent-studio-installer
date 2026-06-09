@@ -17,7 +17,7 @@ PROJECT_DEPENDENCIES = (
     "openai-tts @ git+https://github.com/mz038197/openai-tts.git",
     PEAS_AGENT_CORE_DEP,
 )
-UPDATE_PRESERVE_DIRS = frozenset({"workspace", "sessions", "scripts", "uploads", "pages"})
+UPDATE_PRESERVE_DIRS = frozenset({"workspace", "sessions", "scripts", "uploads", "pages", "data"})
 
 
 @dataclass(frozen=True)

@@ -60,7 +60,10 @@ def test_create_agent_for_session_uses_agent_create(
 
     agent = module._create_agent_for_session("session_test.jsonl")
 
-    fake_agent_class.create.assert_called_once_with(session_name="session_test.jsonl")
+    fake_agent_class.create.assert_called_once_with(
+        session_name="session_test.jsonl",
+        host_context=module.studio_base_context(),
+    )
     assert agent is fake_agent
 
 
@@ -118,6 +121,52 @@ def test_new_session_can_be_created_after_all_sessions_removed(
 
     assert module.st.session_state["session_name"].endswith(".jsonl")
     assert (session_dir / module.st.session_state["session_name"]).is_file()
+
+
+def test_studio_base_context_mentions_shared_data_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_agent_panel_module(monkeypatch)
+    context = module.studio_base_context()
+    assert "studio_shell/pages" in context or "pages" in context
+    assert "data" in context
+    assert "load_page_data" in context
+    assert "write_file" in context
+    assert "home.json" in context
+    assert "playground.json" in context
+
+
+def test_render_chat_panel_user_prompt_uses_extra_context_only() -> None:
+    source = (
+        Path(__file__).parents[1]
+        / "src"
+        / "add_studio_shell"
+        / "templates"
+        / "studio_shell"
+        / "agent_panel.py"
+    ).read_text(encoding="utf-8")
+    chat_block = source.split('if user_text := st.chat_input("詢問 Agent..."', 1)[1]
+    assert "studio_base_context(page_name)" not in chat_block
+    assert "【目前頁面狀態】" in chat_block
+
+
+def test_render_chat_panel_reruns_after_successful_chat() -> None:
+    source = (
+        Path(__file__).parents[1]
+        / "src"
+        / "add_studio_shell"
+        / "templates"
+        / "studio_shell"
+        / "agent_panel.py"
+    ).read_text(encoding="utf-8")
+    chat_block = source.split('if user_text := st.chat_input("詢問 Agent..."', 1)[1]
+    assert "st.rerun()" in chat_block
+
+
+def test_installer_preserves_data_directory_on_update() -> None:
+    from add_studio_shell.installer import UPDATE_PRESERVE_DIRS
+
+    assert "data" in UPDATE_PRESERVE_DIRS
 
 
 def test_render_chat_panel_avoids_empty_selectbox() -> None:

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import streamlit as st
 
 
@@ -27,6 +30,34 @@ def inject_style() -> None:
 </style>
 """,
         unsafe_allow_html=True,
+    )
+
+
+def page_slug(page_name: str) -> str:
+    return page_name.strip().lower()
+
+
+def shared_data_path(page_name: str, *, shell_root: Path) -> Path:
+    return shell_root / "data" / f"{page_slug(page_name)}.json"
+
+
+def load_page_data(page_name: str, *, shell_root: Path) -> dict:
+    path = shared_data_path(page_name, shell_root=shell_root)
+    if not path.is_file():
+        return {}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def save_page_data(page_name: str, data: dict, *, shell_root: Path) -> None:
+    path = shared_data_path(page_name, shell_root=shell_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
     )
 
 

@@ -334,17 +334,25 @@ def _maybe_migrate_legacy_data() -> str | None:
     return " ".join(messages) if messages else None
 
 
-def studio_base_context(page_name: str = "") -> str:
-    parts = [
-        "這是學生的 Agent Studio Streamlit 專案。",
-        f"Shell 目錄：{_display_path(SHELL_ROOT)}。",
-        f"Agent 工作區：{PEAS_WORKSPACE.as_posix()}（記憶、skills、tools、對話紀錄）。",
-        f"腳本目錄：{_display_path(SCRIPTS_DIR)}（Agent 如需寫 Python 請放這裡）。",
-        "不要修改 studio_shell/agent_panel.py 或 page_shell.py，除非學生明確要求。",
-    ]
-    if page_name:
-        parts.append(f"目前 Streamlit 頁面：{page_name}。")
-    return " ".join(parts)
+def studio_base_context() -> str:
+    return "\n".join([
+        f"Streamlit 專案根目錄：{_display_path(PROJECT_ROOT)}",
+        f"左欄 UI 程式：{_display_path(SHELL_ROOT / 'pages')}（每頁一個檔案）",
+        "左欄各頁以 `render_main()` 收集 widget 狀態，用 `format_extra_context()` 組成 extra context 並 return；"
+        "`page_shell` 會在學生送訊息時附上【目前頁面狀態】。",
+        "extra context 是每則訊息的即時快照（含尚未寫入檔案的 widget 輸入），不可只靠讀檔取代。",
+        f"共享狀態檔目錄：{_display_path(SHELL_ROOT / 'data')}（與 pages 同層）。",
+        "慣例路徑：`studio_shell/data/{page_slug}.json`；page_slug = 頁面名稱小寫（Playground → playground.json）。",
+        "左欄 `render_main()` 從該檔讀取初始值餵 widget。",
+        "左欄程式讀寫 JSON 用 `load_page_data()` / `save_page_data()`（`shell_ui.py`）；Agent 不可呼叫這兩個 helper。",
+        "Agent 要改左欄狀態時：先 `read_file`【共享資料檔】，再用 `edit_file`/`write_file` 更新同一 JSON；勿直接改 Streamlit widget。",
+        "每頁的 extra context 應含【共享資料檔】完整路徑（可用 `shared_data_path()`），讓 Agent 知道此刻要操作哪個檔。",
+        f"內建 JSON 模板目錄：{_display_path(SHELL_ROOT / 'data')}。",
+        "內建欄位：home.json → nickname(str), goal(str)；playground.json → nickname, mood(str), energy(int 1-10), event(str), count(int)。",
+        "Agent 寫入時須保留既有鍵名與型別，只改目標欄位；新頁面建立 JSON 時，鍵名須與該頁 `save_page_data({...})` 一致，可複製同目錄既有模板再改。",
+        "學生新增 page 時：建立 `pages/N_xxx.py` + `data/{page_slug}.json` 模板（含初始鍵值），左欄 load/save 與 extra context 欄位對齊。",
+        "參考範例：`pages/1_Home.py`、`data/home.json`；`pages/2_Playground.py`、`data/playground.json`。",
+    ])
 
 
 def _clear_agent_cache() -> None:
@@ -550,7 +558,10 @@ def _create_agent_for_session(session_name: str) -> Any:
             "找不到 peas-agent-core。請執行 add-studio-shell 安裝依賴，"
             "或手動 uv add peas-agent-core。"
         ) from exc
-    return Agent.create(session_name=session_name)
+    return Agent.create(
+        session_name=session_name,
+        host_context=studio_base_context(),
+    )
 
 
 def _get_agent_for_session(session_name: str) -> Any:
@@ -744,10 +755,10 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
             display_user_text = f"{user_text}\n\n（已附圖：{image_path}）"
 
         st.session_state["studio_chat_history"].append(("user", display_user_text))
-        context = studio_base_context(page_name)
         if extra_context.strip():
-            context = f"{context}\n\n【目前頁面狀態】\n{extra_context.strip()}"
-        prompt = f"{context}\n\n學生問題：{user_text}"
+            prompt = f"【目前頁面狀態】\n{extra_context.strip()}\n\n學生問題：{user_text}"
+        else:
+            prompt = f"學生問題：{user_text}"
 
         with chat:
             with st.chat_message("user"):
@@ -789,3 +800,4 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
                         stream_tts_play(answer, tts_settings)
                     except Exception as exc:
                         st.warning(f"語音播放發生錯誤，文字回答已保留：`{exc}`")
+                st.rerun()
