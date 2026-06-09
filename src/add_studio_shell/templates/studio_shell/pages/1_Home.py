@@ -52,8 +52,8 @@ def render_main() -> str:
     extra = format_extra_context(
         PAGE_NAME,
         共享資料檔=str(shared_data_path(PAGE_NAME, shell_root=SHELL_ROOT)),
-        暱稱=nickname or "（未填）",
-        今日目標=goal or "（未填）",
+        左欄暱稱=nickname or "（未填）",
+        左欄今日目標=goal or "（未填）",
     )
     st.code(extra, language="text")
 

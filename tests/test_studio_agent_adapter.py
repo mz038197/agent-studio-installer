@@ -128,12 +128,17 @@ def test_studio_base_context_mentions_shared_data_contract(
 ) -> None:
     module = _load_agent_panel_module(monkeypatch)
     context = module.studio_base_context()
+    assert "USER.md" in context
+    assert "左欄暱稱" in context
+    assert "資料快照" in context
+    assert "絕對路徑" in context
     assert "studio_shell/pages" in context or "pages" in context
     assert "data" in context
     assert "load_page_data" in context
     assert "write_file" in context
     assert "home.json" in context
     assert "playground.json" in context
+    assert "學生" not in context
 
 
 def test_render_chat_panel_user_prompt_uses_extra_context_only() -> None:
@@ -148,6 +153,21 @@ def test_render_chat_panel_user_prompt_uses_extra_context_only() -> None:
     chat_block = source.split('if user_text := st.chat_input("詢問 Agent..."', 1)[1]
     assert "studio_base_context(page_name)" not in chat_block
     assert "【目前頁面狀態】" in chat_block
+    assert "使用者問題：" in chat_block
+    assert "學生問題：" not in chat_block
+
+
+def test_templates_avoid_task_in_extra_context() -> None:
+    root = Path(__file__).parents[1] / "src" / "add_studio_shell" / "templates" / "studio_shell"
+    paths = [
+        root / "app.py",
+        root / "pages" / "1_Home.py",
+        root / "pages" / "2_Playground.py",
+        root / "pages" / "3_UI_Cheatsheet.py",
+    ]
+    combined = "\n".join(p.read_text(encoding="utf-8") for p in paths)
+    assert "【任務】" not in combined
+    assert "【本頁焦點】" not in combined
 
 
 def test_render_chat_panel_reruns_after_successful_chat() -> None:

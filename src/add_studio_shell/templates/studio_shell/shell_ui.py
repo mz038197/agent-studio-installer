@@ -62,6 +62,12 @@ def save_page_data(page_name: str, data: dict, *, shell_root: Path) -> None:
 
 
 def format_extra_context(page_name: str, **fields: object) -> str:
+    """Build a pure data snapshot for user-message 【目前頁面狀態】.
+
+    - First line is always 【目前頁面】
+    - Use 左欄* prefixes for form/widget values; 共享資料檔 for absolute JSON path
+    - Do not include 【任務】, 【本頁焦點】, or imperative instructions
+    """
     lines = [f"【目前頁面】{page_name}"]
     for key, value in fields.items():
         lines.append(f"【{key}】{value}")

@@ -11,7 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from studio_shell.page_shell import page_shell
-from studio_shell.shell_ui import inject_style
+from studio_shell.shell_ui import format_extra_context, inject_style
 
 
 st.set_page_config(page_title="Agent Studio", page_icon="🤖", layout="wide")
@@ -33,13 +33,13 @@ def overview() -> None:
 
 ### 建議流程
 1. 設定 `~/.peas-agent/config.json`（LLM api_key）與 `tts.json`（語音，選填）
-2. 在 **Home** 確認接線已通，再到 **Playground** 自己完成 extra context 接線
+2. 在 **Home** 與 **Playground** 體驗 extra context 與共享 JSON 雙向互動
 3. 到 **UI 元件詞彙表** 找元件名稱，練習把元件名稱放進 Prompt
 4. 修改或新增 `pages/` 練習自己的 UI
 """
         )
         st.info("詳細練習題見 `docs/exercises.md`（若已安裝在專案中）。")
-        return "【目前頁面】總覽\n【任務】向學生說明左欄創意、右欄 Agent 的分工。"
+        return format_extra_context("總覽")
 
     page_shell(
         "Agent Studio",

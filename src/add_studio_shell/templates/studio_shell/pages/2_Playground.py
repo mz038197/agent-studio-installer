@@ -91,11 +91,11 @@ def render_main() -> str:
     extra = format_extra_context(
         PAGE_NAME,
         共享資料檔=str(shared_data_path(PAGE_NAME, shell_root=SHELL_ROOT)),
-        暱稱=nickname or "（未填）",
-        心情=mood,
-        能量=f"{energy}/10",
-        今日事件=event or "（未填）",
-        計數器=count,
+        左欄暱稱=nickname or "（未填）",
+        左欄心情=mood,
+        左欄能量=f"{energy}/10",
+        左欄今日事件=event or "（未填）",
+        左欄計數器=count,
     )
     st.code(extra, language="text")
 
