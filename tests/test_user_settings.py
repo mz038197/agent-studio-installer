@@ -14,16 +14,16 @@ class _FakeSettings:
         self,
         *,
         api_key: str = "",
-        base_url: str = "",
         voice: str = "nova",
         instructions: str = "default instructions",
         speed: float | None = None,
+        **kwargs: object,
     ) -> None:
         self.api_key = api_key
-        self.base_url = base_url
         self.voice = voice
         self.instructions = instructions
         self.speed = speed
+        self.extra_kwargs = kwargs
 
 
 def _load_agent_panel_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
@@ -338,6 +338,55 @@ def test_sync_tts_preferences_persists_pending_widget_changes_before_reload(
     assert payload["speed"] == 1.25
     assert session_state["studio_tts_instructions"] == "changed in widget"
     assert session_state["studio_tts_speed"] == 1.25
+
+
+def test_build_tts_settings_for_playback_passes_api_key_only(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module = _load_agent_panel_module(monkeypatch, tmp_path)
+    settings_path = tmp_path / ".peas-agent" / "tts.json"
+    settings_path.parent.mkdir(parents=True)
+    settings_path.write_text(
+        json.dumps(
+            {
+                "api_key": "sk-test",
+                "base_url": "https://example.com/v1",
+                "enabled": True,
+                "voice": "alloy",
+                "instructions": "test",
+                "speed": 1.0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    session_state = module.st.session_state
+    session_state["studio_tts_enabled"] = True
+    session_state["studio_tts_voice"] = "alloy"
+    session_state["studio_tts_instructions"] = "test"
+    session_state["studio_tts_speed"] = 1.0
+
+    result = module._build_tts_settings_for_playback()
+
+    assert result is not None
+    assert result.api_key == "sk-test"
+    assert result.voice == "alloy"
+    assert result.instructions == "test"
+    assert result.speed == 1.0
+    assert result.extra_kwargs == {}
+
+
+def test_build_tts_settings_for_playback_returns_none_without_api_key(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module = _load_agent_panel_module(monkeypatch, tmp_path)
+    module._ensure_tts_config_file()
+    session_state = module.st.session_state
+    session_state["studio_tts_enabled"] = True
+    session_state["studio_tts_voice"] = "nova"
+    session_state["studio_tts_instructions"] = "test"
+    session_state["studio_tts_speed"] = 1.0
+
+    assert module._build_tts_settings_for_playback() is None
 
 
 def test_assistant_reply_is_saved_before_tts_playback() -> None:

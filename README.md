@@ -33,7 +33,7 @@ uvx --from git+https://github.com/mz038197/agent-studio-installer.git add-studio
 By default, installation and update also run:
 
 ```powershell
-uv add --upgrade-package openai-tts streamlit "openai-tts @ git+https://github.com/mz038197/openai-tts.git" "peas-agent-core @ git+https://github.com/mz038197/peas-agent-core.git@v0.1.1"
+uv add --upgrade-package openai-tts --upgrade-package peas-agent-core streamlit "openai-tts @ git+https://github.com/mz038197/openai-tts.git" "peas-agent-core @ git+https://github.com/mz038197/peas-agent-core.git"
 ```
 
 Skip dependency changes:

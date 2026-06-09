@@ -10,7 +10,7 @@ from pathlib import Path
 
 SHELL_DIR_NAME = "studio_shell"
 PEAS_AGENT_CORE_DEP = (
-    "peas-agent-core @ git+https://github.com/mz038197/peas-agent-core.git@v0.1.1"
+    "peas-agent-core @ git+https://github.com/mz038197/peas-agent-core.git"
 )
 PROJECT_DEPENDENCIES = (
     "streamlit",
@@ -84,7 +84,15 @@ def _install_dependencies(
     dependency_runner: Callable[..., object],
 ) -> tuple[str, ...]:
     dependency_runner(
-        ["uv", "add", "--upgrade-package", "openai-tts", *PROJECT_DEPENDENCIES],
+        [
+            "uv",
+            "add",
+            "--upgrade-package",
+            "openai-tts",
+            "--upgrade-package",
+            "peas-agent-core",
+            *PROJECT_DEPENDENCIES,
+        ],
         cwd=project_root,
         check=True,
     )

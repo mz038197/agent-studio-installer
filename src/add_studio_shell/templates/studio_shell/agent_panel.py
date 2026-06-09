@@ -239,7 +239,6 @@ def _build_tts_settings_for_playback() -> Settings | None:
         return None
     return Settings(
         api_key=api_key,
-        base_url=str(cfg.get("base_url") or ""),
         voice=str(st.session_state["studio_tts_voice"]),
         instructions=str(st.session_state["studio_tts_instructions"]).strip(),
         speed=float(st.session_state["studio_tts_speed"]),
