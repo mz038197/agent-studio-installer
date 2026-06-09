@@ -40,7 +40,7 @@ def install(
     require_agent_core: bool = typer.Option(
         False,
         "--require-agent-core",
-        help="Require agent_core.py to exist before installing.",
+        help="Require peas-agent-core to be installed (needs --install-deps).",
     ),
     install_dependencies: bool = typer.Option(
         True,

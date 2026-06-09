@@ -28,11 +28,11 @@ def overview() -> None:
 - 改左欄 → 右欄回答應跟著變
 
 ### 右欄 · 我的 Agent
-- 連接專案根目錄的 `agent_core.py`
+- 連接 `peas-agent-core`（設定在 `~/.peas-agent/config.json`）
 - 讀取左欄傳來的頁面狀態再回答
 
 ### 建議流程
-1. 完成 `agent_core.py`
+1. 設定 `~/.peas-agent/config.json`（LLM api_key）與 `tts.json`（語音，選填）
 2. 在 **Home** 確認接線已通，再到 **Playground** 自己完成 extra context 接線
 3. 到 **UI 元件詞彙表** 找元件名稱，練習把元件名稱放進 Prompt
 4. 修改或新增 `pages/` 練習自己的 UI

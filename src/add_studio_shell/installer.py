@@ -9,9 +9,13 @@ from pathlib import Path
 
 
 SHELL_DIR_NAME = "studio_shell"
+PEAS_AGENT_CORE_DEP = (
+    "peas-agent-core @ git+https://github.com/mz038197/peas-agent-core.git@v0.1.1"
+)
 PROJECT_DEPENDENCIES = (
     "streamlit",
     "openai-tts @ git+https://github.com/mz038197/openai-tts.git",
+    PEAS_AGENT_CORE_DEP,
 )
 UPDATE_PRESERVE_DIRS = frozenset({"workspace", "sessions", "scripts", "uploads", "pages"})
 
@@ -36,10 +40,10 @@ def install_shell(
     if not project_root.exists() or not project_root.is_dir():
         raise FileNotFoundError(f"Project root does not exist: {project_root}")
 
-    if require_agent_core and not (project_root / "agent_core.py").exists():
+    if require_agent_core and not install_dependencies:
         raise FileNotFoundError(
-            "agent_core.py was not found. Run this from a workshop project root, "
-            "or omit --require-agent-core."
+            "peas-agent-core is required but --no-install-deps was set. "
+            "Re-run without --no-install-deps, or omit --require-agent-core."
         )
 
     target = project_root / SHELL_DIR_NAME

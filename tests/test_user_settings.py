@@ -12,22 +12,22 @@ import pytest
 class _FakeSettings:
     def __init__(
         self,
+        *,
+        api_key: str = "",
+        base_url: str = "",
         voice: str = "nova",
         instructions: str = "default instructions",
         speed: float | None = None,
     ) -> None:
+        self.api_key = api_key
+        self.base_url = base_url
         self.voice = voice
         self.instructions = instructions
         self.speed = speed
 
-    @classmethod
-    def from_env(cls):
-        return cls(voice="onyx", instructions="env instructions", speed=1.5)
-
 
 def _load_agent_panel_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     fake_streamlit = types.SimpleNamespace(session_state={})
-    fake_dotenv = types.SimpleNamespace(load_dotenv=lambda *_args, **_kwargs: None)
     fake_openai_tts = types.SimpleNamespace(
         Settings=_FakeSettings,
         stream_tts_play=lambda *_args, **_kwargs: None,
@@ -38,7 +38,6 @@ def _load_agent_panel_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     )
 
     monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
-    monkeypatch.setitem(sys.modules, "dotenv", fake_dotenv)
     monkeypatch.setitem(sys.modules, "openai_tts", fake_openai_tts)
     monkeypatch.setitem(sys.modules, "openai_tts.settings", fake_openai_tts_settings)
 
@@ -56,12 +55,18 @@ def _load_agent_panel_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     module = util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    monkeypatch.setattr(module, "WORKSPACE_DIR", tmp_path / "workspace")
-    monkeypatch.setattr(module, "USER_SETTINGS_PATH", tmp_path / "workspace" / "user_settings.json")
+    peas_home = tmp_path / ".peas-agent"
+    workspace = peas_home / "workspace"
+    monkeypatch.setattr(module, "PEAS_AGENT_HOME", peas_home)
+    monkeypatch.setattr(module, "PEAS_WORKSPACE", workspace)
+    monkeypatch.setattr(module, "SESSION_DIR", workspace / "sessions")
+    monkeypatch.setattr(module, "CHAT_IMAGE_DIR", workspace / "uploads" / "chat_images")
+    monkeypatch.setattr(module, "TTS_CONFIG_PATH", peas_home / "tts.json")
+    monkeypatch.setattr(module, "MIGRATION_MARKER_PATH", peas_home / ".studio_migration_done")
     return module
 
 
-def _normalize_tts_preferences(
+def _normalize_tts_config(
     raw: dict[str, object],
     defaults: dict[str, object],
     *,
@@ -69,44 +74,52 @@ def _normalize_tts_preferences(
     min_speed: float,
     max_speed: float,
 ) -> dict[str, object]:
-    voice = str(raw.get("tts_voice", defaults["tts_voice"]))
+    voice = str(raw.get("voice", raw.get("tts_voice", defaults["voice"])))
     if voice not in voice_options:
-        voice = str(defaults["tts_voice"])
+        voice = str(defaults["voice"])
 
     try:
-        speed = float(raw.get("tts_speed", defaults["tts_speed"]))
+        speed = float(raw.get("speed", raw.get("tts_speed", defaults["speed"])))
     except (TypeError, ValueError):
-        speed = float(defaults["tts_speed"])
+        speed = float(defaults["speed"])
     speed = max(min_speed, min(max_speed, speed))
 
+    enabled = raw.get("enabled", raw.get("tts_enabled", defaults["enabled"]))
+    instructions = raw.get("instructions", raw.get("tts_instructions", defaults["instructions"]))
+
     return {
-        "tts_enabled": bool(raw.get("tts_enabled", defaults["tts_enabled"])),
-        "tts_voice": voice,
-        "tts_instructions": str(raw.get("tts_instructions", defaults["tts_instructions"])),
-        "tts_speed": speed,
+        "api_key": str(raw.get("api_key", defaults["api_key"])),
+        "base_url": str(raw.get("base_url", defaults["base_url"])),
+        "enabled": bool(enabled),
+        "voice": voice,
+        "instructions": str(instructions),
+        "speed": speed,
     }
 
 
-def test_user_settings_roundtrip(tmp_path: Path) -> None:
-    settings_path = tmp_path / "user_settings.json"
+def test_tts_config_roundtrip(tmp_path: Path) -> None:
+    settings_path = tmp_path / "tts.json"
     defaults = {
-        "tts_enabled": False,
-        "tts_voice": "nova",
-        "tts_instructions": "",
-        "tts_speed": 1.0,
+        "api_key": "",
+        "base_url": "",
+        "enabled": False,
+        "voice": "nova",
+        "instructions": "",
+        "speed": 1.0,
     }
     voice_options = {"nova", "alloy"}
 
     payload = {
-        "tts_enabled": True,
-        "tts_voice": "alloy",
-        "tts_instructions": "用輕快的語氣說話。",
-        "tts_speed": 1.25,
+        "api_key": "sk-test",
+        "enabled": True,
+        "voice": "alloy",
+        "instructions": "用輕快的語氣說話。",
+        "speed": 1.25,
     }
     settings_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
     loaded = json.loads(settings_path.read_text(encoding="utf-8"))
-    normalized = _normalize_tts_preferences(
+    normalized = _normalize_tts_config(
         loaded,
         defaults,
         voice_options=voice_options,
@@ -115,76 +128,91 @@ def test_user_settings_roundtrip(tmp_path: Path) -> None:
     )
 
     assert normalized == {
-        "tts_enabled": True,
-        "tts_voice": "alloy",
-        "tts_instructions": "用輕快的語氣說話。",
-        "tts_speed": 1.25,
+        "api_key": "sk-test",
+        "base_url": "",
+        "enabled": True,
+        "voice": "alloy",
+        "instructions": "用輕快的語氣說話。",
+        "speed": 1.25,
     }
 
     settings_path.write_text(json.dumps(normalized, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     roundtrip = json.loads(settings_path.read_text(encoding="utf-8"))
-    assert roundtrip["tts_voice"] == "alloy"
+    assert roundtrip["voice"] == "alloy"
 
 
-def test_user_settings_invalid_voice_falls_back_to_default(tmp_path: Path) -> None:
+def test_tts_config_invalid_voice_falls_back_to_default(tmp_path: Path) -> None:
     defaults = {
-        "tts_enabled": False,
-        "tts_voice": "nova",
-        "tts_instructions": "",
-        "tts_speed": 1.0,
+        "api_key": "",
+        "base_url": "",
+        "enabled": False,
+        "voice": "nova",
+        "instructions": "",
+        "speed": 1.0,
     }
-    normalized = _normalize_tts_preferences(
-        {"tts_voice": "unknown-voice", "tts_speed": "bad"},
+    normalized = _normalize_tts_config(
+        {"voice": "unknown-voice", "speed": "bad"},
         defaults,
         voice_options={"nova"},
         min_speed=0.5,
         max_speed=2.0,
     )
-    assert normalized["tts_voice"] == "nova"
-    assert normalized["tts_speed"] == 1.0
+    assert normalized["voice"] == "nova"
+    assert normalized["speed"] == 1.0
 
 
-def test_agent_panel_creates_default_user_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_agent_panel_creates_default_tts_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     module = _load_agent_panel_module(monkeypatch, tmp_path)
 
-    message = module._ensure_user_settings_file()
+    message = module._ensure_tts_config_file()
 
     assert message is None
-    payload = json.loads((tmp_path / "workspace" / "user_settings.json").read_text(encoding="utf-8"))
+    payload = json.loads((tmp_path / ".peas-agent" / "tts.json").read_text(encoding="utf-8"))
     assert payload == {
-        "tts_enabled": False,
-        "tts_voice": "nova",
-        "tts_instructions": "default instructions",
-        "tts_speed": 1.0,
+        "api_key": "",
+        "base_url": "",
+        "enabled": False,
+        "voice": "nova",
+        "instructions": "用台灣繁體中文說話。",
+        "speed": 1.0,
     }
 
 
-def test_agent_panel_repairs_empty_user_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_agent_panel_repairs_empty_tts_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     module = _load_agent_panel_module(monkeypatch, tmp_path)
-    settings_path = tmp_path / "workspace" / "user_settings.json"
+    settings_path = tmp_path / ".peas-agent" / "tts.json"
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text("", encoding="utf-8")
 
-    message = module._ensure_user_settings_file()
+    message = module._ensure_tts_config_file()
 
     assert message is None
     payload = json.loads(settings_path.read_text(encoding="utf-8"))
     assert payload == {
-        "tts_enabled": False,
-        "tts_voice": "nova",
-        "tts_instructions": "default instructions",
-        "tts_speed": 1.0,
+        "api_key": "",
+        "base_url": "",
+        "enabled": False,
+        "voice": "nova",
+        "instructions": "用台灣繁體中文說話。",
+        "speed": 1.0,
     }
 
 
-def test_agent_panel_save_user_settings_reports_write_errors(
+def test_agent_panel_save_tts_config_reports_write_errors(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     module = _load_agent_panel_module(monkeypatch, tmp_path)
-    monkeypatch.setattr(module, "_ensure_workspace_dir", lambda: (_ for _ in ()).throw(OSError("no access")))
+    original_write_text = Path.write_text
 
-    message = module._save_user_settings({"tts_voice": "nova"})
+    def _fail_tts_write(self: Path, *args, **kwargs):
+        if self.name == "tts.json":
+            raise OSError("no access")
+        return original_write_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", _fail_tts_write)
+
+    message = module._save_tts_config({"voice": "nova"})
 
     assert message is not None
     assert "無法寫入語音設定檔" in message
@@ -203,15 +231,15 @@ def test_sync_tts_preferences_for_page_reloads_on_page_change(
     tmp_path: Path,
 ) -> None:
     module = _load_agent_panel_module(monkeypatch, tmp_path)
-    settings_path = tmp_path / "workspace" / "user_settings.json"
+    settings_path = tmp_path / ".peas-agent" / "tts.json"
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(
         json.dumps(
             {
-                "tts_enabled": True,
-                "tts_voice": "alloy",
-                "tts_instructions": "from file",
-                "tts_speed": 1.5,
+                "enabled": True,
+                "voice": "alloy",
+                "instructions": "from file",
+                "speed": 1.5,
             },
             ensure_ascii=False,
         ),
@@ -239,15 +267,15 @@ def test_sync_tts_preferences_for_page_reloads_from_file_on_same_page(
     tmp_path: Path,
 ) -> None:
     module = _load_agent_panel_module(monkeypatch, tmp_path)
-    settings_path = tmp_path / "workspace" / "user_settings.json"
+    settings_path = tmp_path / ".peas-agent" / "tts.json"
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(
         json.dumps(
             {
-                "tts_enabled": True,
-                "tts_voice": "alloy",
-                "tts_instructions": "from file",
-                "tts_speed": 1.5,
+                "enabled": True,
+                "voice": "alloy",
+                "instructions": "from file",
+                "speed": 1.5,
             },
             ensure_ascii=False,
         ),
@@ -273,15 +301,15 @@ def test_sync_tts_preferences_persists_pending_widget_changes_before_reload(
     tmp_path: Path,
 ) -> None:
     module = _load_agent_panel_module(monkeypatch, tmp_path)
-    settings_path = tmp_path / "workspace" / "user_settings.json"
+    settings_path = tmp_path / ".peas-agent" / "tts.json"
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(
         json.dumps(
             {
-                "tts_enabled": True,
-                "tts_voice": "alloy",
-                "tts_instructions": "from file",
-                "tts_speed": 1.5,
+                "enabled": True,
+                "voice": "alloy",
+                "instructions": "from file",
+                "speed": 1.5,
             },
             ensure_ascii=False,
         ),
@@ -290,11 +318,13 @@ def test_sync_tts_preferences_persists_pending_widget_changes_before_reload(
 
     session_state = module.st.session_state
     session_state["_studio_tts_page_name"] = "Home"
-    session_state["_studio_user_settings_snapshot"] = {
-        "tts_enabled": True,
-        "tts_voice": "alloy",
-        "tts_instructions": "from file",
-        "tts_speed": 1.5,
+    session_state["_studio_tts_snapshot"] = {
+        "api_key": "",
+        "base_url": "",
+        "enabled": True,
+        "voice": "alloy",
+        "instructions": "from file",
+        "speed": 1.5,
     }
     session_state["studio_tts_enabled"] = True
     session_state["studio_tts_voice"] = "alloy"
@@ -304,8 +334,8 @@ def test_sync_tts_preferences_persists_pending_widget_changes_before_reload(
     module._sync_tts_preferences_for_page("Home")
 
     payload = json.loads(settings_path.read_text(encoding="utf-8"))
-    assert payload["tts_instructions"] == "changed in widget"
-    assert payload["tts_speed"] == 1.25
+    assert payload["instructions"] == "changed in widget"
+    assert payload["speed"] == 1.25
     assert session_state["studio_tts_instructions"] == "changed in widget"
     assert session_state["studio_tts_speed"] == 1.25
 

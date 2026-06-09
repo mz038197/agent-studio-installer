@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from add_studio_shell.installer import install_shell
+from add_studio_shell.installer import PEAS_AGENT_CORE_DEP, install_shell
 
 
 def test_install_shell_copies_template_without_agent_core(tmp_path: Path) -> None:
@@ -15,18 +15,34 @@ def test_install_shell_copies_template_without_agent_core(tmp_path: Path) -> Non
     assert (result.target / "page_shell.py").exists()
     assert (result.target / "pages" / "2_Playground.py").exists()
     assert (result.target / "pages" / "3_UI_Cheatsheet.py").exists()
-    assert (result.target / "workspace" / ".gitkeep").exists()
-    assert (result.target / "sessions" / ".gitkeep").exists()
-    assert (result.target / "scripts" / ".gitkeep").exists()
 
 
 def test_install_shell_can_require_agent_core(tmp_path: Path) -> None:
-    with pytest.raises(FileNotFoundError, match="agent_core.py"):
-        install_shell(tmp_path, require_agent_core=True, install_dependencies=False)
+    calls: list[tuple[list[str], Path, bool]] = []
+
+    def fake_runner(args: list[str], *, cwd: Path, check: bool) -> None:
+        calls.append((args, cwd, check))
+
+    result = install_shell(
+        tmp_path,
+        require_agent_core=True,
+        dependency_runner=fake_runner,
+    )
+
+    assert (result.target / "agent_panel.py").exists()
+    assert PEAS_AGENT_CORE_DEP in calls[0][0]
+
+
+def test_install_shell_require_agent_core_rejects_no_install_deps(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="peas-agent-core"):
+        install_shell(
+            tmp_path,
+            require_agent_core=True,
+            install_dependencies=False,
+        )
 
 
 def test_install_shell_refuses_existing_target(tmp_path: Path) -> None:
-    (tmp_path / "agent_core.py").write_text("class Agent: ...\n", encoding="utf-8")
     install_shell(tmp_path, install_dependencies=False)
 
     with pytest.raises(FileExistsError, match="already exists"):
@@ -34,7 +50,6 @@ def test_install_shell_refuses_existing_target(tmp_path: Path) -> None:
 
 
 def test_install_shell_force_backs_up_existing_target(tmp_path: Path) -> None:
-    (tmp_path / "agent_core.py").write_text("class Agent: ...\n", encoding="utf-8")
     install_shell(tmp_path, install_dependencies=False)
 
     result = install_shell(tmp_path, force=True, install_dependencies=False)
@@ -45,16 +60,19 @@ def test_install_shell_force_backs_up_existing_target(tmp_path: Path) -> None:
 
 
 def test_install_shell_update_preserves_runtime_data(tmp_path: Path) -> None:
-    (tmp_path / "agent_core.py").write_text("class Agent: ...\n", encoding="utf-8")
     result = install_shell(tmp_path, install_dependencies=False)
     target = result.target
     original_app = (target / "app.py").read_text(encoding="utf-8")
 
     (target / "app.py").write_text("# stale app\n", encoding="utf-8")
     (target / "old_core.py").write_text("# stale core\n", encoding="utf-8")
-    (target / "workspace" / "notes.txt").write_text("keep me\n", encoding="utf-8")
+    workspace_dir = target / "workspace"
+    workspace_dir.mkdir(exist_ok=True)
+    (workspace_dir / "notes.txt").write_text("keep me\n", encoding="utf-8")
     (target / "pages" / "9_MyPage.py").write_text("# student page\n", encoding="utf-8")
-    (target / "sessions" / "session_20260529_000000_abc123.jsonl").write_text(
+    sessions_dir = target / "sessions"
+    sessions_dir.mkdir(exist_ok=True)
+    (sessions_dir / "session_20260529_000000_abc123.jsonl").write_text(
         "{}\n",
         encoding="utf-8",
     )
@@ -71,16 +89,14 @@ def test_install_shell_update_preserves_runtime_data(tmp_path: Path) -> None:
     assert updated.backed_up_to is None
     assert (target / "app.py").read_text(encoding="utf-8") == original_app
     assert not (target / "old_core.py").exists()
-    assert (target / "workspace" / "notes.txt").read_text(encoding="utf-8") == "keep me\n"
+    assert (workspace_dir / "notes.txt").read_text(encoding="utf-8") == "keep me\n"
     assert (target / "pages" / "9_MyPage.py").read_text(encoding="utf-8") == "# student page\n"
-    assert (target / "sessions" / "session_20260529_000000_abc123.jsonl").exists()
+    assert (sessions_dir / "session_20260529_000000_abc123.jsonl").exists()
     assert (scripts_dir / "student_tool.py").read_text(encoding="utf-8") == "# keep me\n"
     assert (upload_dir / "image.png").read_bytes() == b"png"
 
 
 def test_install_shell_update_installs_when_target_missing(tmp_path: Path) -> None:
-    (tmp_path / "agent_core.py").write_text("class Agent: ...\n", encoding="utf-8")
-
     result = install_shell(tmp_path, update=True, install_dependencies=False)
 
     assert (result.target / "app.py").exists()
@@ -103,6 +119,7 @@ def test_install_shell_installs_project_dependencies_by_default(tmp_path: Path) 
                 "openai-tts",
                 "streamlit",
                 "openai-tts @ git+https://github.com/mz038197/openai-tts.git",
+                PEAS_AGENT_CORE_DEP,
             ],
             tmp_path.resolve(),
             True,
@@ -111,4 +128,5 @@ def test_install_shell_installs_project_dependencies_by_default(tmp_path: Path) 
     assert result.installed_dependencies == (
         "streamlit",
         "openai-tts @ git+https://github.com/mz038197/openai-tts.git",
+        PEAS_AGENT_CORE_DEP,
     )
