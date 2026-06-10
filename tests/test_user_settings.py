@@ -3,27 +3,36 @@ from __future__ import annotations
 import json
 import sys
 import types
+from dataclasses import dataclass, field
 from importlib import util
 from pathlib import Path
 
 import pytest
 
 
+@dataclass
 class _FakeSettings:
-    def __init__(
-        self,
-        *,
-        api_key: str = "",
-        voice: str = "nova",
-        instructions: str = "default instructions",
-        speed: float | None = None,
-        **kwargs: object,
-    ) -> None:
-        self.api_key = api_key
-        self.voice = voice
-        self.instructions = instructions
-        self.speed = speed
-        self.extra_kwargs = kwargs
+    DEFAULT_INSTRUCTIONS = "default instructions from openai-tts"
+    DEFAULT_SPEED = 1.25
+    DEFAULT_VOICE = "nova"
+
+    api_key: str = ""
+    voice: str = DEFAULT_VOICE
+    instructions: str = DEFAULT_INSTRUCTIONS
+    speed: float = DEFAULT_SPEED
+    extra_kwargs: dict[str, object] = field(default_factory=dict)
+
+
+def _expected_default_tts_config() -> dict[str, object]:
+    env = _FakeSettings()
+    return {
+        "api_key": "",
+        "base_url": "",
+        "enabled": False,
+        "voice": env.voice,
+        "instructions": env.instructions,
+        "speed": env.speed,
+    }
 
 
 def _load_agent_panel_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
@@ -168,14 +177,7 @@ def test_agent_panel_creates_default_tts_config(monkeypatch: pytest.MonkeyPatch,
 
     assert message is None
     payload = json.loads((tmp_path / ".peas-agent" / "tts.json").read_text(encoding="utf-8"))
-    assert payload == {
-        "api_key": "",
-        "base_url": "",
-        "enabled": False,
-        "voice": "nova",
-        "instructions": "用台灣繁體中文說話。",
-        "speed": 1.0,
-    }
+    assert payload == _expected_default_tts_config()
 
 
 def test_agent_panel_repairs_empty_tts_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -188,14 +190,49 @@ def test_agent_panel_repairs_empty_tts_config(monkeypatch: pytest.MonkeyPatch, t
 
     assert message is None
     payload = json.loads(settings_path.read_text(encoding="utf-8"))
-    assert payload == {
-        "api_key": "",
-        "base_url": "",
-        "enabled": False,
-        "voice": "nova",
-        "instructions": "用台灣繁體中文說話。",
-        "speed": 1.0,
-    }
+    assert payload == _expected_default_tts_config()
+
+
+def test_agent_panel_upgrades_legacy_hardcoded_tts_config(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module = _load_agent_panel_module(monkeypatch, tmp_path)
+    settings_path = tmp_path / ".peas-agent" / "tts.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(
+        json.dumps(
+            {
+                "api_key": "sk-test",
+                "enabled": True,
+                "voice": "nova",
+                "instructions": "用台灣繁體中文說話。",
+                "speed": 1.0,
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    message = module._ensure_tts_config_file()
+
+    assert message is None
+    payload = json.loads(settings_path.read_text(encoding="utf-8"))
+    expected = _expected_default_tts_config()
+    assert payload["instructions"] == expected["instructions"]
+    assert payload["speed"] == expected["speed"]
+    assert payload["api_key"] == "sk-test"
+    assert payload["enabled"] is True
+
+
+def test_normalize_tts_config_empty_instructions_falls_back_to_default(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module = _load_agent_panel_module(monkeypatch, tmp_path)
+    defaults = module._default_tts_config()
+
+    normalized = module._normalize_tts_config({"instructions": "   "}, defaults)
+
+    assert normalized["instructions"] == defaults["instructions"]
 
 
 def test_agent_panel_save_tts_config_reports_write_errors(
@@ -373,6 +410,36 @@ def test_build_tts_settings_for_playback_passes_api_key_only(
     assert result.instructions == "test"
     assert result.speed == 1.0
     assert result.extra_kwargs == {}
+
+
+def test_build_tts_settings_for_playback_falls_back_to_default_instructions(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module = _load_agent_panel_module(monkeypatch, tmp_path)
+    settings_path = tmp_path / ".peas-agent" / "tts.json"
+    settings_path.parent.mkdir(parents=True)
+    settings_path.write_text(
+        json.dumps(
+            {
+                "api_key": "sk-test",
+                "enabled": True,
+                "voice": "alloy",
+                "instructions": "   ",
+                "speed": 1.25,
+            }
+        ),
+        encoding="utf-8",
+    )
+    session_state = module.st.session_state
+    session_state["studio_tts_enabled"] = True
+    session_state["studio_tts_voice"] = "alloy"
+    session_state["studio_tts_instructions"] = "   "
+    session_state["studio_tts_speed"] = 1.25
+
+    result = module._build_tts_settings_for_playback()
+
+    assert result is not None
+    assert result.instructions == _FakeSettings.DEFAULT_INSTRUCTIONS
 
 
 def test_build_tts_settings_for_playback_returns_none_without_api_key(

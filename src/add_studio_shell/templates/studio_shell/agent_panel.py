@@ -5,6 +5,7 @@ import io
 import json
 import shutil
 import uuid
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -50,6 +51,8 @@ TTS_VOICE_LABELS: dict[str, str] = {
     "sage": "女聲 · 沉穩、較內斂",
     "shimmer": "女聲 · 輕快、偏年輕",
 }
+LEGACY_HARDCODED_TTS_INSTRUCTIONS = "用台灣繁體中文說話。"
+LEGACY_HARDCODED_TTS_SPEED = 1.0
 
 
 def _tts_voice_label(voice_id: str) -> str:
@@ -69,14 +72,36 @@ def _ensure_peas_dirs() -> None:
 
 
 def _default_tts_config() -> dict[str, object]:
+    env = Settings()
     return {
         "api_key": "",
         "base_url": "",
         "enabled": False,
-        "voice": "nova",
-        "instructions": "用台灣繁體中文說話。",
-        "speed": 1.0,
+        "voice": env.voice,
+        "instructions": env.instructions,
+        "speed": env.speed,
     }
+
+
+def _is_legacy_hardcoded_tts_config(config: dict[str, object]) -> bool:
+    try:
+        speed = float(config.get("speed", 0))
+    except (TypeError, ValueError):
+        return False
+    return (
+        speed == LEGACY_HARDCODED_TTS_SPEED
+        and str(config.get("instructions", "")) == LEGACY_HARDCODED_TTS_INSTRUCTIONS
+    )
+
+
+def _upgrade_legacy_hardcoded_tts_config(config: dict[str, object]) -> dict[str, object]:
+    defaults = _default_tts_config()
+    upgraded = dict(config)
+    upgraded["instructions"] = defaults["instructions"]
+    upgraded["speed"] = defaults["speed"]
+    if str(upgraded.get("voice", "")) not in TTS_VOICE_OPTIONS:
+        upgraded["voice"] = defaults["voice"]
+    return upgraded
 
 
 def _normalize_tts_config(
@@ -95,13 +120,14 @@ def _normalize_tts_config(
 
     enabled = raw.get("enabled", raw.get("tts_enabled", defaults["enabled"]))
     instructions = raw.get("instructions", raw.get("tts_instructions", defaults["instructions"]))
+    instructions = str(instructions).strip() or str(defaults["instructions"])
 
     return {
         "api_key": str(raw.get("api_key", defaults["api_key"])),
         "base_url": str(raw.get("base_url", defaults["base_url"])),
         "enabled": bool(enabled),
         "voice": voice,
-        "instructions": str(instructions),
+        "instructions": instructions,
         "speed": speed,
     }
 
@@ -121,6 +147,12 @@ def _read_tts_config() -> tuple[dict[str, object], bool]:
         return defaults, True
 
     normalized = _normalize_tts_config(raw, defaults)
+    if _is_legacy_hardcoded_tts_config(normalized):
+        normalized = _normalize_tts_config(
+            _upgrade_legacy_hardcoded_tts_config(normalized),
+            defaults,
+        )
+        return normalized, True
     return normalized, raw != normalized
 
 
@@ -234,10 +266,12 @@ def _build_tts_settings_for_playback() -> Settings | None:
     api_key = str(cfg.get("api_key", "")).strip()
     if not api_key:
         return None
-    return Settings(
+    return replace(
+        Settings(),
         api_key=api_key,
         voice=str(st.session_state["studio_tts_voice"]),
-        instructions=str(st.session_state["studio_tts_instructions"]).strip(),
+        instructions=str(st.session_state["studio_tts_instructions"]).strip()
+        or Settings().instructions,
         speed=float(st.session_state["studio_tts_speed"]),
     )
 
@@ -247,7 +281,7 @@ def _render_tts_settings_ui(*, settings_error: str | None = None) -> None:
         st.warning(settings_error)
 
     voice_options = list(TTS_VOICE_OPTIONS)
-    current_voice = str(st.session_state.get("studio_tts_voice", "nova"))
+    current_voice = str(st.session_state.get("studio_tts_voice", Settings().voice))
     if current_voice not in voice_options:
         voice_options.insert(0, current_voice)
 

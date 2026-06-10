@@ -97,7 +97,7 @@ Studio and CLI share `~/.peas-agent/`:
 
 ## TTS settings
 
-TTS preferences are stored at `~/.peas-agent/tts.json` (not in the project):
+TTS preferences are stored at `~/.peas-agent/tts.json` (not in the project). Default `voice`, `instructions`, and `speed` come from `openai-tts` `Settings()`; Studio adds `enabled` and `api_key`:
 
 ```json
 {
@@ -105,14 +105,16 @@ TTS preferences are stored at `~/.peas-agent/tts.json` (not in the project):
   "base_url": "",
   "enabled": false,
   "voice": "nova",
-  "instructions": "用台灣繁體中文說話。",
-  "speed": 1.0
+  "instructions": "<openai-tts DEFAULT_TTS_INSTRUCTIONS>",
+  "speed": 1.25
 }
 ```
 
+`base_url` is reserved for future use; TTS playback currently uses the OpenAI default endpoint only.
+
 The right-side panel reads and writes this file. TTS uses **only** `tts.json` — no fallback to `config.json` or project `.env`.
 
-On first start, legacy `studio_shell/workspace/user_settings.json` is migrated automatically.
+On first start, legacy `studio_shell/workspace/user_settings.json` is migrated automatically. Old hardcoded defaults (`speed: 1.0` with short instructions) are upgraded to `Settings()` defaults on load.
 
 ## Update vs force
 
