@@ -62,6 +62,7 @@ def test_create_agent_for_session_uses_agent_create(
 
     fake_agent_class.create.assert_called_once_with(
         session_name="session_test.jsonl",
+        project_root=module.PROJECT_ROOT,
         host_context=module.studio_base_context(),
     )
     assert agent is fake_agent
@@ -130,15 +131,47 @@ def test_studio_base_context_mentions_shared_data_contract(
     context = module.studio_base_context()
     assert "USER.md" in context
     assert "左欄暱稱" in context
-    assert "資料快照" in context
-    assert "絕對路徑" in context
-    assert "studio_shell/pages" in context or "pages" in context
+    assert "相對路徑會解析到 Streamlit 專案根目錄" in context
+    assert "studio_shell/data/{page_slug}.json" in context
+    assert "studio_shell/pages/N_xxx.py" in context
+    assert "studio_shell/pages/1_Home.py" in context
+    assert "studio_shell/data/home.json" in context
+    assert "Project root" in context or "專案根目錄" in context
+    assert "完整絕對路徑" in context
+    assert "studio_shell/pages" in context
     assert "data" in context
     assert "load_page_data" in context
     assert "write_file" in context
     assert "home.json" in context
     assert "playground.json" in context
+    assert "相對路徑會解析到 ~/.peas-agent/workspace" not in context
+    assert "勿用 `studio_shell/data/...` 相對路徑" not in context
+    assert "必須使用【共享資料檔】或上述目錄的完整絕對路徑" not in context
     assert "學生" not in context
+
+
+def test_save_uploaded_chat_image_returns_absolute_path(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = _load_agent_panel_module(monkeypatch)
+    chat_image_dir = tmp_path / "uploads" / "chat_images"
+    monkeypatch.setattr(module, "CHAT_IMAGE_DIR", chat_image_dir)
+    monkeypatch.setattr(module, "PEAS_WORKSPACE", tmp_path)
+    monkeypatch.setattr(module, "_ensure_peas_dirs", lambda: chat_image_dir.mkdir(parents=True, exist_ok=True))
+
+    class FakeUpload:
+        name = "shot.png"
+
+        @staticmethod
+        def getvalue() -> bytes:
+            return b"fake-png"
+
+    rel_or_abs, err = module._save_uploaded_chat_image(FakeUpload())
+    assert err is None
+    assert rel_or_abs is not None
+    assert Path(rel_or_abs).is_absolute()
+    assert Path(rel_or_abs).is_file()
 
 
 def test_render_chat_panel_user_prompt_uses_extra_context_only() -> None:

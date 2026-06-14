@@ -368,15 +368,15 @@ def _maybe_migrate_legacy_data() -> str | None:
 def studio_base_context() -> str:
     return "\n".join([
         "使用者身份、名稱、角色、偏好以 system prompt 中的 USER.md 為準；【目前頁面狀態】與【左欄暱稱】只代表左欄表單快照，不得取代 USER.md 身份。",
-        f"Streamlit 專案根目錄：{_display_path(PROJECT_ROOT)}",
+        f"Streamlit 專案根目錄（等同 system prompt 的 Project root）：{_display_path(PROJECT_ROOT)}",
         f"左欄 UI 程式：{_display_path(SHELL_ROOT / 'pages')}（每頁一個檔案）",
         "左欄各頁以 `render_main()` 收集 widget 狀態，用 `format_extra_context()` 組成 extra context 並 return；"
         "`page_shell` 會在使用者送訊息時附上【目前頁面狀態】。",
         "extra context 以本次 render 的 widget 值為準，不可假設讀檔一定等同目前畫面；禁止在 extra context 寫【任務】或指令語氣。",
         f"共享狀態檔目錄：{_display_path(SHELL_ROOT / 'data')}（與 pages 同層）。",
         "檔名慣例：`{page_slug}.json`（page_slug = 頁面名稱小寫，Playground → playground.json）。",
-        "讀寫 Studio 共享 JSON 時，`read_file`/`write_file`/`edit_file` 必須使用【共享資料檔】或上述目錄的完整絕對路徑。",
-        "勿用 `studio_shell/data/...` 相對路徑（相對路徑會解析到 ~/.peas-agent/workspace，找不到專案檔）。",
+        "Agent file tools 的相對路徑會解析到 Streamlit 專案根目錄；日常專案檔案優先使用相對路徑。",
+        "讀寫 Studio 共享 JSON 時，可使用 `studio_shell/data/{page_slug}.json`，也可使用【共享資料檔】的完整絕對路徑避免歧義。",
         "左欄 `render_main()` 從該檔讀取初始值餵 widget。",
         "左欄程式讀寫 JSON 用 `load_page_data()` / `save_page_data()`（`shell_ui.py`）；Agent 不可呼叫這兩個 helper。",
         "Agent 要改左欄狀態時：先 `read_file`【共享資料檔】，再用 `edit_file`/`write_file` 更新同一 JSON；勿直接改 Streamlit widget。",
@@ -384,8 +384,8 @@ def studio_base_context() -> str:
         f"內建 JSON 模板目錄：{_display_path(SHELL_ROOT / 'data')}。",
         "內建欄位：home.json → nickname(str), goal(str)；playground.json → nickname, mood(str), energy(int 1-10), event(str), count(int)。",
         "Agent 寫入時須保留既有鍵名與型別，只改目標欄位；新頁面建立 JSON 時，鍵名須與該頁 `save_page_data({...})` 一致，可複製同目錄既有模板再改。",
-        "使用者新增 page 時：建立 `pages/N_xxx.py` + `data/{page_slug}.json` 模板（含初始鍵值），左欄 load/save 與 extra context 欄位對齊。",
-        "參考範例：`pages/1_Home.py`、`data/home.json`；`pages/2_Playground.py`、`data/playground.json`。",
+        "使用者新增 page 時：建立 `studio_shell/pages/N_xxx.py` + `studio_shell/data/{page_slug}.json` 模板（含初始鍵值），左欄 load/save 與 extra context 欄位對齊。",
+        "參考範例：`studio_shell/pages/1_Home.py`、`studio_shell/data/home.json`；`studio_shell/pages/2_Playground.py`、`studio_shell/data/playground.json`。",
     ])
 
 
@@ -423,7 +423,7 @@ def _save_uploaded_chat_image(uploaded_file) -> tuple[str | None, str | None]:
     filename = f"chat_image_{datetime.now():%Y%m%d_%H%M%S}_{uuid.uuid4().hex[:8]}{suffix}"
     target = CHAT_IMAGE_DIR / filename
     target.write_bytes(data)
-    return target.relative_to(PEAS_WORKSPACE).as_posix(), None
+    return str(target.resolve()), None
 
 
 def _new_session_path() -> Path:
@@ -594,6 +594,7 @@ def _create_agent_for_session(session_name: str) -> Any:
         ) from exc
     return Agent.create(
         session_name=session_name,
+        project_root=PROJECT_ROOT,
         host_context=studio_base_context(),
     )
 
