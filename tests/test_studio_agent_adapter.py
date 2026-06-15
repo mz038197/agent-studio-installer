@@ -130,23 +130,19 @@ def test_studio_base_context_mentions_shared_data_contract(
     module = _load_agent_panel_module(monkeypatch)
     context = module.studio_base_context()
     assert "USER.md" in context
-    assert "左欄暱稱" in context
-    assert "相對路徑會解析到 Streamlit 專案根目錄" in context
-    assert "studio_shell/data/{page_slug}.json" in context
-    assert "studio_shell/pages/N_xxx.py" in context
-    assert "studio_shell/pages/1_Home.py" in context
-    assert "studio_shell/data/home.json" in context
-    assert "Project root" in context or "專案根目錄" in context
-    assert "完整絕對路徑" in context
-    assert "studio_shell/pages" in context
-    assert "data" in context
+    assert "勿改 app.py" in context
+    assert "Rerun" in context
+    assert "Order.py" in context
+    assert "側欄忽略" in context
     assert "load_page_data" in context
+    assert "read_file" in context
+    assert "edit_file" in context
     assert "write_file" in context
+    assert "1_Home.py" in context
     assert "home.json" in context
-    assert "playground.json" in context
+    assert "【新增頁】" in context
+    assert "playground.json" not in context
     assert "相對路徑會解析到 ~/.peas-agent/workspace" not in context
-    assert "勿用 `studio_shell/data/...` 相對路徑" not in context
-    assert "必須使用【共享資料檔】或上述目錄的完整絕對路徑" not in context
     assert "學生" not in context
 
 

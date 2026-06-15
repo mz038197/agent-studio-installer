@@ -11,6 +11,7 @@ def test_install_shell_copies_template_without_agent_core(tmp_path: Path) -> Non
     result = install_shell(tmp_path, install_dependencies=False)
 
     assert (result.target / "app.py").exists()
+    assert (result.target / "navigation.py").exists()
     assert (result.target / "agent_panel.py").exists()
     assert (result.target / "page_shell.py").exists()
     assert (result.target / "pages" / "2_Playground.py").exists()
@@ -94,6 +95,19 @@ def test_install_shell_update_preserves_runtime_data(tmp_path: Path) -> None:
     assert (sessions_dir / "session_20260529_000000_abc123.jsonl").exists()
     assert (scripts_dir / "student_tool.py").read_text(encoding="utf-8") == "# keep me\n"
     assert (upload_dir / "image.png").read_bytes() == b"png"
+
+    from importlib import util
+
+    nav_spec = util.spec_from_file_location(
+        "installed_navigation",
+        target / "navigation.py",
+    )
+    assert nav_spec is not None
+    assert nav_spec.loader is not None
+    nav = util.module_from_spec(nav_spec)
+    nav_spec.loader.exec_module(nav)
+    discovered = nav.discover_file_pages(target / "pages")
+    assert any(path.name == "9_MyPage.py" for path in discovered)
 
 
 def test_install_shell_update_installs_when_target_missing(tmp_path: Path) -> None:

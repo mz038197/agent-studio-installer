@@ -366,26 +366,23 @@ def _maybe_migrate_legacy_data() -> str | None:
 
 
 def studio_base_context() -> str:
+    pages_dir = _display_path(SHELL_ROOT / "pages")
+    data_dir = _display_path(SHELL_ROOT / "data")
     return "\n".join([
-        "使用者身份、名稱、角色、偏好以 system prompt 中的 USER.md 為準；【目前頁面狀態】與【左欄暱稱】只代表左欄表單快照，不得取代 USER.md 身份。",
-        f"Streamlit 專案根目錄（等同 system prompt 的 Project root）：{_display_path(PROJECT_ROOT)}",
-        f"左欄 UI 程式：{_display_path(SHELL_ROOT / 'pages')}（每頁一個檔案）",
-        "左欄各頁以 `render_main()` 收集 widget 狀態，用 `format_extra_context()` 組成 extra context 並 return；"
-        "`page_shell` 會在使用者送訊息時附上【目前頁面狀態】。",
-        "extra context 以本次 render 的 widget 值為準，不可假設讀檔一定等同目前畫面；禁止在 extra context 寫【任務】或指令語氣。",
-        f"共享狀態檔目錄：{_display_path(SHELL_ROOT / 'data')}（與 pages 同層）。",
-        "檔名慣例：`{page_slug}.json`（page_slug = 頁面名稱小寫，Playground → playground.json）。",
-        "Agent file tools 的相對路徑會解析到 Streamlit 專案根目錄；日常專案檔案優先使用相對路徑。",
-        "讀寫 Studio 共享 JSON 時，可使用 `studio_shell/data/{page_slug}.json`，也可使用【共享資料檔】的完整絕對路徑避免歧義。",
-        "左欄 `render_main()` 從該檔讀取初始值餵 widget。",
-        "左欄程式讀寫 JSON 用 `load_page_data()` / `save_page_data()`（`shell_ui.py`）；Agent 不可呼叫這兩個 helper。",
-        "Agent 要改左欄狀態時：先 `read_file`【共享資料檔】，再用 `edit_file`/`write_file` 更新同一 JSON；勿直接改 Streamlit widget。",
-        "有共享檔的頁面，extra context 應含【共享資料檔】完整路徑（可用 `shared_data_path()`）。",
-        f"內建 JSON 模板目錄：{_display_path(SHELL_ROOT / 'data')}。",
-        "內建欄位：home.json → nickname(str), goal(str)；playground.json → nickname, mood(str), energy(int 1-10), event(str), count(int)。",
-        "Agent 寫入時須保留既有鍵名與型別，只改目標欄位；新頁面建立 JSON 時，鍵名須與該頁 `save_page_data({...})` 一致，可複製同目錄既有模板再改。",
-        "使用者新增 page 時：建立 `studio_shell/pages/N_xxx.py` + `studio_shell/data/{page_slug}.json` 模板（含初始鍵值），左欄 load/save 與 extra context 欄位對齊。",
-        "參考範例：`studio_shell/pages/1_Home.py`、`studio_shell/data/home.json`；`studio_shell/pages/2_Playground.py`、`studio_shell/data/playground.json`。",
+        "【身份】USER.md 為準；【目前頁面狀態】/【左欄*】僅表單快照，非使用者身份。",
+        f"【路徑】專案根：{_display_path(PROJECT_ROOT)}；左欄頁面：{pages_dir}；"
+        f"共享 JSON：{data_dir}/{{slug}}.json（slug=頁名小寫）。",
+        "【左欄↔Agent】render_main → format_extra_context，每則訊息附【目前頁面狀態】。"
+        "以 widget 快照為準，讀檔可能落後；extra context 禁【任務】/指令語氣。",
+        "【Agent 改左欄】read_file【共享資料檔】→ edit_file/write_file 更新 JSON；"
+        "禁 load_page_data/save_page_data、禁改 widget；保留既有鍵名與型別（不確定 schema 先 read_file 模板）。",
+        "【新增頁】"
+        "① studio_shell/pages/{N}_{Name}.py（必須 數字_名稱.py，例 4_Order.py；Order.py 等不符合者側欄忽略）"
+        "② studio_shell/data/{slug}.json "
+        "③ load/save 與 extra context 對齊。"
+        "N 取 pages/ 現有最大數字+1（內建 1–3，自訂通常從 4 起）。"
+        "勿改 app.py；建檔後請使用者 Rerun。"
+        "參考 studio_shell/pages/1_Home.py + studio_shell/data/home.json。",
     ])
 
 

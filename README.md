@@ -126,7 +126,7 @@ uvx --from git+https://github.com/mz038197/agent-studio-installer.git add-studio
 uvx --from git+https://github.com/mz038197/agent-studio-installer.git add-studio-shell --force
 ```
 
-**Naming tip:** put custom pages in new files like `pages/4_MyDashboard.py`; avoid editing built-in `1_`–`3_` pages so `--update` won't overwrite your work.
+**Naming tip:** custom pages must use `pages/4_MyDashboard.py` (numeric prefix + underscore). Files that do not match `N_xxx.py` are ignored by navigation. No need to edit `app.py`—pages are auto-discovered on each rerun. Avoid editing built-in `1_`–`3_` pages so `--update` won't overwrite your work.
 
 ## Migration checklist (existing projects)
 

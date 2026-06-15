@@ -46,7 +46,7 @@
 **你可以對右欄 Agent 說：**
 
 ```text
-請新增一頁 `pages/4_Order.py`，做一個點餐助手。
+請新增 `pages/4_Order.py`（必須 `數字_名稱.py`，不可用 `Order.py`）與 `data/order.json`，做一個點餐助手。
 
 左欄要有：
 - 主餐選擇
@@ -56,8 +56,7 @@
 - 訂單摘要
 
 請用 Extra Context 把左欄目前訂單傳給右欄 Agent，並顯示「給 Agent 的摘要」。
-可以參考 `pages/1_Home.py`、`pages/2_Playground.py` 和 `pages/3_UI_Cheatsheet.py` 的寫法。
-請不要修改 `studio_shell/agent_panel.py` 或 `studio_shell/page_shell.py`。
+參考 `pages/1_Home.py`；不要改 `app.py`、`studio_shell/agent_panel.py` 或 `studio_shell/page_shell.py`。建完請 Rerun。
 ```
 
 **驗收：** 改左欄主餐或加點後，在右欄問「像店員一樣唸出我的訂單摘要」，回答應該跟著改變。
@@ -110,6 +109,7 @@ JSON 欄位包含：
 3. 摘要含頁面名稱 + 使用者選擇？
 4. 改左欄 → 右欄回答會變？
 5. prompt 有寫規則（語氣、長度）？
+6. 自訂頁檔名符合 `N_xxx.py`、Rerun 後側欄看得到？
 
 ---
 
