@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import sys
 import types
 from importlib import util
@@ -23,6 +24,9 @@ def _load_agent_panel_module(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
     monkeypatch.setitem(sys.modules, "openai_tts", fake_openai_tts)
     monkeypatch.setitem(sys.modules, "openai_tts.settings", fake_openai_tts_settings)
+    fake_multimodal = types.ModuleType("st_multimodal_chatinput")
+    fake_multimodal.multimodal_chatinput = lambda **_kwargs: None
+    monkeypatch.setitem(sys.modules, "st_multimodal_chatinput", fake_multimodal)
 
     module_path = (
         Path(__file__).parents[1]
@@ -170,6 +174,55 @@ def test_save_uploaded_chat_image_returns_absolute_path(
     assert Path(rel_or_abs).is_file()
 
 
+def test_save_chat_image_bytes_rejects_oversized_image(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = _load_agent_panel_module(monkeypatch)
+    chat_image_dir = tmp_path / "uploads" / "chat_images"
+    monkeypatch.setattr(module, "CHAT_IMAGE_DIR", chat_image_dir)
+    monkeypatch.setattr(module, "_ensure_peas_dirs", lambda: chat_image_dir.mkdir(parents=True, exist_ok=True))
+
+    path, err = module._save_chat_image_bytes(b"x" * (module.MAX_CHAT_IMAGE_BYTES + 1), suffix=".png")
+    assert path is None
+    assert err is not None
+    assert "5 MB" in err
+
+
+def test_pending_image_from_multimodal_file_decodes_base64(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_agent_panel_module(monkeypatch)
+    payload = base64.b64encode(b"fake-png").decode("ascii")
+    pending, err = module._pending_image_from_multimodal_file(
+        {"name": "clip.png", "type": "image/png", "content": payload}
+    )
+    assert err is None
+    assert pending is not None
+    assert pending["bytes"] == b"fake-png"
+    assert pending["suffix"] == ".png"
+
+
+def test_resolve_submission_image_prefers_multimodal_over_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_agent_panel_module(monkeypatch)
+    session_name = "session_test.jsonl"
+    module.st.session_state[module._pending_chat_image_key(session_name)] = {
+        "bytes": b"from-uploader",
+        "suffix": ".png",
+        "name": "uploader.png",
+        "mime": "image/png",
+    }
+    pasted, err = module._resolve_submission_image(
+        session_name,
+        [{"name": "paste.png", "type": "image/png", "content": base64.b64encode(b"from-paste").decode("ascii")}],
+    )
+    assert err is None
+    assert pasted is not None
+    assert pasted["bytes"] == b"from-paste"
+
+
 def test_render_chat_panel_user_prompt_uses_extra_context_only() -> None:
     source = (
         Path(__file__).parents[1]
@@ -179,7 +232,7 @@ def test_render_chat_panel_user_prompt_uses_extra_context_only() -> None:
         / "studio_shell"
         / "agent_panel.py"
     ).read_text(encoding="utf-8")
-    chat_block = source.split('if user_text := st.chat_input("詢問 Agent..."', 1)[1]
+    chat_block = source.split("if should_process_submission:", 1)[1]
     assert "studio_base_context(page_name)" not in chat_block
     assert "【目前頁面狀態】" in chat_block
     assert "使用者問題：" in chat_block
@@ -208,7 +261,7 @@ def test_render_chat_panel_reruns_after_successful_chat() -> None:
         / "studio_shell"
         / "agent_panel.py"
     ).read_text(encoding="utf-8")
-    chat_block = source.split('if user_text := st.chat_input("詢問 Agent..."', 1)[1]
+    chat_block = source.split("if should_process_submission:", 1)[1]
     assert "st.rerun()" in chat_block
 
 

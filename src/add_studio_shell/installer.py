@@ -14,6 +14,7 @@ PEAS_AGENT_CORE_DEP = (
 )
 PROJECT_DEPENDENCIES = (
     "streamlit",
+    "st-multimodal-chatinput",
     "openai-tts @ git+https://github.com/mz038197/openai-tts.git",
     PEAS_AGENT_CORE_DEP,
 )

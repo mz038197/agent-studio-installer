@@ -49,6 +49,9 @@ def _load_agent_panel_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
     monkeypatch.setitem(sys.modules, "openai_tts", fake_openai_tts)
     monkeypatch.setitem(sys.modules, "openai_tts.settings", fake_openai_tts_settings)
+    fake_multimodal = types.ModuleType("st_multimodal_chatinput")
+    fake_multimodal.multimodal_chatinput = lambda **_kwargs: None
+    monkeypatch.setitem(sys.modules, "st_multimodal_chatinput", fake_multimodal)
 
     module_path = (
         Path(__file__).parents[1]
@@ -465,7 +468,7 @@ def test_assistant_reply_is_saved_before_tts_playback() -> None:
         / "studio_shell"
         / "agent_panel.py"
     ).read_text(encoding="utf-8")
-    user_message_flow = source.split('if user_text := st.chat_input("詢問 Agent...", key="studio_chat"):', 1)[1]
+    user_message_flow = source.split("if should_process_submission:", 1)[1]
 
     save_index = user_message_flow.index('st.session_state["studio_chat_history"].append(("assistant", answer))')
     tts_index = user_message_flow.index("stream_tts_play(answer, tts_settings)")

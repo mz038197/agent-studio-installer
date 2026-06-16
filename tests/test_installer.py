@@ -134,6 +134,7 @@ def test_install_shell_installs_project_dependencies_by_default(tmp_path: Path) 
                 "--upgrade-package",
                 "peas-agent-core",
                 "streamlit",
+                "st-multimodal-chatinput",
                 "openai-tts @ git+https://github.com/mz038197/openai-tts.git",
                 PEAS_AGENT_CORE_DEP,
             ],
@@ -143,6 +144,7 @@ def test_install_shell_installs_project_dependencies_by_default(tmp_path: Path) 
     ]
     assert result.installed_dependencies == (
         "streamlit",
+        "st-multimodal-chatinput",
         "openai-tts @ git+https://github.com/mz038197/openai-tts.git",
         PEAS_AGENT_CORE_DEP,
     )

@@ -33,7 +33,7 @@ uvx --from git+https://github.com/mz038197/agent-studio-installer.git add-studio
 By default, installation and update also run:
 
 ```powershell
-uv add --upgrade-package openai-tts --upgrade-package peas-agent-core streamlit "openai-tts @ git+https://github.com/mz038197/openai-tts.git" "peas-agent-core @ git+https://github.com/mz038197/peas-agent-core.git"
+uv add --upgrade-package openai-tts --upgrade-package peas-agent-core streamlit st-multimodal-chatinput "openai-tts @ git+https://github.com/mz038197/openai-tts.git" "peas-agent-core @ git+https://github.com/mz038197/peas-agent-core.git"
 ```
 
 Skip dependency changes:
@@ -79,6 +79,8 @@ Studio and CLI share `~/.peas-agent/`:
     ├── tools/           # custom LangChain tools
     └── uploads/chat_images/
 ```
+
+**Chat images:** attach via **Browse files** above the input, or **Ctrl+V** in the chat box (clipboard images from screenshots or web copy). PNG/JPG/WEBP, max 5 MB. Image-only messages are allowed.
 
 **config.json** example:
 
@@ -146,6 +148,6 @@ See `docs/exercises.md` in this repo for guided left-column + Agent context prac
 - Connects the right panel to `peas-agent-core` via `Agent.create()`.
 - Persists chat sessions and agent memory under `~/.peas-agent/workspace/`.
 - Persists TTS preferences to `~/.peas-agent/tts.json`.
-- Installs `streamlit`, `openai-tts`, and `peas-agent-core` by default.
+- Installs `streamlit`, `st-multimodal-chatinput`, `openai-tts`, and `peas-agent-core` by default.
 - Refuses to overwrite an existing shell unless `--force` is used.
 - Supports `--update` to refresh shell core while preserving student pages.
