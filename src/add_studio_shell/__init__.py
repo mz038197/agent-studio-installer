@@ -1,3 +1,3 @@
 """Install the workshop Agent Studio Streamlit shell into agent projects."""
 
-__version__ = "0.4.1"
+__version__ = "0.4.2"

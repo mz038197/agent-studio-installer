@@ -203,6 +203,26 @@ def test_pending_image_from_multimodal_file_decodes_base64(
     assert pending["suffix"] == ".png"
 
 
+def test_pending_image_from_data_url_decodes_clipboard_image(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_agent_panel_module(monkeypatch)
+    payload = "data:image/png;base64," + base64.b64encode(b"fake-png").decode("ascii")
+    pending, err = module._pending_image_from_data_url(payload)
+    assert err is None
+    assert pending is not None
+    assert pending["bytes"] == b"fake-png"
+    assert pending["suffix"] == ".png"
+
+
+def test_multimodal_user_text_reads_text_field(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_agent_panel_module(monkeypatch)
+    assert module._multimodal_user_text({"text": "  hello  "}) == "hello"
+    assert module._multimodal_user_text({"textInput": "legacy"}) == "legacy"
+
+
 def test_resolve_submission_image_prefers_multimodal_over_pending(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -214,9 +234,10 @@ def test_resolve_submission_image_prefers_multimodal_over_pending(
         "name": "uploader.png",
         "mime": "image/png",
     }
+    pasted_payload = "data:image/png;base64," + base64.b64encode(b"from-paste").decode("ascii")
     pasted, err = module._resolve_submission_image(
         session_name,
-        [{"name": "paste.png", "type": "image/png", "content": base64.b64encode(b"from-paste").decode("ascii")}],
+        {"text": "hi", "images": [pasted_payload]},
     )
     assert err is None
     assert pasted is not None

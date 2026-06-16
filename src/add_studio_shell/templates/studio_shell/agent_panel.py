@@ -529,10 +529,38 @@ def _render_chat_image_attachment_ui(session_name: str) -> None:
             st.rerun()
 
 
+def _multimodal_user_text(chatinput: dict[str, Any]) -> str:
+    return str(chatinput.get("textInput") or chatinput.get("text") or "").strip()
+
+
+def _pending_image_from_data_url(
+    data_url: str,
+    *,
+    index: int = 0,
+) -> tuple[dict[str, Any] | None, str | None]:
+    if not data_url.startswith("data:") or "," not in data_url:
+        return None, "無法讀取貼上的圖片內容。"
+
+    header, encoded = data_url.split(",", 1)
+    mime = header.split(":", 1)[1].split(";", 1)[0].strip().lower()
+    suffix = _suffix_from_mime(mime)
+    if suffix is None:
+        return None, "只支援 PNG、JPG、JPEG、WEBP 圖片。"
+
+    try:
+        data = base64.b64decode(encoded)
+    except (ValueError, TypeError):
+        return None, "無法讀取貼上的圖片內容。"
+
+    name = f"pasted_{index + 1}{suffix}"
+    return _pending_image_from_bytes(data=data, suffix=suffix, name=name, mime=mime)
+
+
 def _resolve_submission_image(
     session_name: str,
-    multimodal_files: list[dict[str, Any]],
+    chatinput: dict[str, Any],
 ) -> tuple[dict[str, Any] | None, str | None]:
+    multimodal_files = chatinput.get("uploadedFiles") or []
     image_files = [
         file_info
         for file_info in multimodal_files
@@ -541,6 +569,12 @@ def _resolve_submission_image(
     if image_files:
         return _pending_image_from_multimodal_file(image_files[-1])
 
+    data_urls = chatinput.get("images") or []
+    if data_urls:
+        pending, error = _pending_image_from_data_url(str(data_urls[-1]), index=len(data_urls) - 1)
+        if pending is not None or error is not None:
+            return pending, error
+
     pending = st.session_state.get(_pending_chat_image_key(session_name))
     if pending:
         return pending, None
@@ -548,13 +582,15 @@ def _resolve_submission_image(
 
 
 def _chat_submission_token(chatinput: dict[str, Any]) -> str:
+    text = _multimodal_user_text(chatinput)
     files = chatinput.get("uploadedFiles") or []
     image_names = sorted(
         str(file_info.get("name", "") or "")
         for file_info in files
         if str(file_info.get("type", "") or "").startswith("image/")
     )
-    text = str(chatinput.get("textInput", "") or "")
+    if not image_names:
+        image_names = [f"data-url:{idx}" for idx, _ in enumerate(chatinput.get("images") or [])]
     return f"{text}\0{','.join(image_names)}"
 
 
@@ -930,9 +966,8 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
     if chatinput is not None:
         submission_token = _chat_submission_token(chatinput)
         if submission_token != st.session_state.get("studio_last_chat_submission_token"):
-            user_text = str(chatinput.get("textInput", "") or "").strip()
-            multimodal_files = chatinput.get("uploadedFiles") or []
-            pending_image, image_error = _resolve_submission_image(current_session, multimodal_files)
+            user_text = _multimodal_user_text(chatinput)
+            pending_image, image_error = _resolve_submission_image(current_session, chatinput)
             if image_error:
                 st.warning(image_error)
                 pending_image = None
