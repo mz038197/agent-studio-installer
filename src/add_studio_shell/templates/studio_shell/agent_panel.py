@@ -413,15 +413,6 @@ def _remove_activation_marker() -> None:
         AGENT_ACTIVATION_MARKER_PATH.unlink()
 
 
-def _pending_chat_image_key(session_name: str) -> str:
-    return f"studio_pending_chat_image_{session_name}"
-
-
-def _chat_image_uploader_key(session_name: str) -> str:
-    version = st.session_state.get("studio_chat_image_version", 0)
-    return f"studio_chat_image_{session_name}_{version}"
-
-
 def _suffix_from_mime(mime: str) -> str | None:
     normalized = mime.lower().split(";", 1)[0].strip()
     return MIME_TO_CHAT_IMAGE_SUFFIX.get(normalized)
@@ -461,18 +452,6 @@ def _pending_image_from_bytes(*, data: bytes, suffix: str, name: str, mime: str)
     return {"bytes": data, "suffix": suffix, "name": name, "mime": mime}, None
 
 
-def _pending_image_from_upload(uploaded_file) -> tuple[dict[str, Any] | None, str | None]:
-    suffix = _suffix_from_filename(uploaded_file.name)
-    if suffix is None:
-        return None, "只支援 PNG、JPG、JPEG、WEBP 圖片。"
-    return _pending_image_from_bytes(
-        data=uploaded_file.getvalue(),
-        suffix=suffix,
-        name=uploaded_file.name,
-        mime=f"image/{suffix.lstrip('.')}",
-    )
-
-
 def _pending_image_from_multimodal_file(file_info: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
     mime = str(file_info.get("type", "") or "")
     if not mime.startswith("image/"):
@@ -493,40 +472,6 @@ def _pending_image_from_multimodal_file(file_info: dict[str, Any]) -> tuple[dict
 
     name = str(file_info.get("name", "") or f"pasted{suffix}")
     return _pending_image_from_bytes(data=data, suffix=suffix, name=name, mime=mime)
-
-
-def _clear_pending_chat_image(session_name: str) -> None:
-    st.session_state.pop(_pending_chat_image_key(session_name), None)
-
-
-def _reset_chat_image_uploader() -> None:
-    st.session_state["studio_chat_image_version"] = (
-        st.session_state.get("studio_chat_image_version", 0) + 1
-    )
-
-
-def _render_chat_image_attachment_ui(session_name: str) -> None:
-    pending_key = _pending_chat_image_key(session_name)
-    uploaded_image = st.file_uploader(
-        "附加圖片（選填）",
-        type=["png", "jpg", "jpeg", "webp"],
-        key=_chat_image_uploader_key(session_name),
-        help="可 Browse files 選檔，或在下方輸入框 Ctrl+V 貼上剪貼簿圖片；PNG/JPG/WEBP，上限 5 MB。",
-    )
-    if uploaded_image is not None:
-        pending, error = _pending_image_from_upload(uploaded_image)
-        if error:
-            st.warning(error)
-        elif pending is not None:
-            st.session_state[pending_key] = pending
-
-    pending = st.session_state.get(pending_key)
-    if pending:
-        st.image(pending["bytes"], caption="下一則訊息會附上這張圖片", use_container_width=True)
-        if st.button("移除圖片", key=f"studio_clear_chat_image_{session_name}"):
-            _clear_pending_chat_image(session_name)
-            _reset_chat_image_uploader()
-            st.rerun()
 
 
 def _multimodal_user_text(chatinput: dict[str, Any]) -> str:
@@ -557,7 +502,6 @@ def _pending_image_from_data_url(
 
 
 def _resolve_submission_image(
-    session_name: str,
     chatinput: dict[str, Any],
 ) -> tuple[dict[str, Any] | None, str | None]:
     multimodal_files = chatinput.get("uploadedFiles") or []
@@ -571,13 +515,8 @@ def _resolve_submission_image(
 
     data_urls = chatinput.get("images") or []
     if data_urls:
-        pending, error = _pending_image_from_data_url(str(data_urls[-1]), index=len(data_urls) - 1)
-        if pending is not None or error is not None:
-            return pending, error
+        return _pending_image_from_data_url(str(data_urls[-1]), index=len(data_urls) - 1)
 
-    pending = st.session_state.get(_pending_chat_image_key(session_name))
-    if pending:
-        return pending, None
     return None, None
 
 
@@ -929,8 +868,6 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
 
     _render_tts_settings_ui(settings_error=settings_error)
 
-    _render_chat_image_attachment_ui(current_session)
-
     try:
         agent = _get_agent_for_session(current_session)
     except RuntimeError as exc:
@@ -952,7 +889,7 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
             with st.chat_message(role):
                 st.markdown(text)
 
-    st.caption("在下方輸入框可輸入文字，或 Ctrl+V 貼上剪貼簿圖片後按 Enter 送出。")
+    st.caption("輸入文字後 Enter 送出；可 Ctrl+V 貼圖，或點輸入框內圖片按鈕選檔（PNG/JPG/WEBP，上限 5 MB）。")
     chatinput = multimodal_chatinput(
         key=f"studio_multimodal_{current_session}",
     )
@@ -967,7 +904,7 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
         submission_token = _chat_submission_token(chatinput)
         if submission_token != st.session_state.get("studio_last_chat_submission_token"):
             user_text = _multimodal_user_text(chatinput)
-            pending_image, image_error = _resolve_submission_image(current_session, chatinput)
+            pending_image, image_error = _resolve_submission_image(chatinput)
             if image_error:
                 st.warning(image_error)
                 pending_image = None
@@ -1041,8 +978,6 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
                     answer = "".join(answer_parts).strip() or final_text.strip()
 
                 st.session_state["studio_chat_history"].append(("assistant", answer))
-                _clear_pending_chat_image(current_session)
-                _reset_chat_image_uploader()
                 if tts_settings is not None and answer:
                     try:
                         stream_tts_play(answer, tts_settings)

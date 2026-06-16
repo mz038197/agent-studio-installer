@@ -80,7 +80,7 @@ Studio and CLI share `~/.peas-agent/`:
     └── uploads/chat_images/
 ```
 
-**Chat images:** attach via **Browse files** above the input, or **Ctrl+V** in the chat box (clipboard images from screenshots or web copy). PNG/JPG/WEBP, max 5 MB. Image-only messages are allowed.
+**Chat images:** attach in the chat input via **Ctrl+V** (clipboard / web copy / screenshots) or the built-in **image button**. PNG/JPG/WEBP, max 5 MB. Image-only messages are allowed.
 
 **config.json** example:
 

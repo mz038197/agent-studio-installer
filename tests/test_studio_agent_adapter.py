@@ -223,25 +223,15 @@ def test_multimodal_user_text_reads_text_field(
     assert module._multimodal_user_text({"textInput": "legacy"}) == "legacy"
 
 
-def test_resolve_submission_image_prefers_multimodal_over_pending(
+def test_resolve_submission_image_reads_images_from_chatinput(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = _load_agent_panel_module(monkeypatch)
-    session_name = "session_test.jsonl"
-    module.st.session_state[module._pending_chat_image_key(session_name)] = {
-        "bytes": b"from-uploader",
-        "suffix": ".png",
-        "name": "uploader.png",
-        "mime": "image/png",
-    }
     pasted_payload = "data:image/png;base64," + base64.b64encode(b"from-paste").decode("ascii")
-    pasted, err = module._resolve_submission_image(
-        session_name,
-        {"text": "hi", "images": [pasted_payload]},
-    )
+    pending, err = module._resolve_submission_image({"text": "hi", "images": [pasted_payload]})
     assert err is None
-    assert pasted is not None
-    assert pasted["bytes"] == b"from-paste"
+    assert pending is not None
+    assert pending["bytes"] == b"from-paste"
 
 
 def test_render_chat_panel_user_prompt_uses_extra_context_only() -> None:
