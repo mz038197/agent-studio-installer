@@ -916,8 +916,8 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
             with st.chat_message(role):
                 st.markdown(text)
 
+    st.caption("在下方輸入框可輸入文字，或 Ctrl+V 貼上剪貼簿圖片後按 Enter 送出。")
     chatinput = multimodal_chatinput(
-        placeholder="詢問 Agent...",
         key=f"studio_multimodal_{current_session}",
     )
 
