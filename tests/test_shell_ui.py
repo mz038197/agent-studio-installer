@@ -9,7 +9,7 @@ import pytest
 
 
 def _load_shell_ui_module(monkeypatch: pytest.MonkeyPatch):
-    fake_streamlit = types.SimpleNamespace()
+    fake_streamlit = types.SimpleNamespace(markdown=lambda *_a, **_k: None)
     monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
 
     module_path = (
@@ -73,3 +73,43 @@ def test_load_page_data_invalid_json_returns_empty_dict(
     data_dir.mkdir(parents=True)
     (data_dir / "home.json").write_text("{not json", encoding="utf-8")
     assert module.load_page_data("Home", shell_root=shell_root) == {}
+
+
+def test_inject_multimodal_chatinput_theme_fix_targets_textarea_color(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_html(html: str, **kwargs: object) -> None:
+        captured["html"] = html
+        captured["kwargs"] = kwargs
+
+    fake_components_v1 = types.SimpleNamespace(html=fake_html)
+    fake_components_pkg = types.ModuleType("streamlit.components")
+    fake_components_pkg.v1 = fake_components_v1
+    fake_streamlit = types.ModuleType("streamlit")
+    fake_streamlit.markdown = lambda *_a, **_k: None
+    fake_streamlit.components = fake_components_pkg
+    monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
+    monkeypatch.setitem(sys.modules, "streamlit.components", fake_components_pkg)
+    monkeypatch.setitem(sys.modules, "streamlit.components.v1", fake_components_v1)
+
+    module_path = (
+        Path(__file__).parents[1]
+        / "src"
+        / "add_studio_shell"
+        / "templates"
+        / "studio_shell"
+        / "shell_ui.py"
+    )
+    spec = util.spec_from_file_location("shell_ui_theme_fix_test", module_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    module.inject_multimodal_chatinput_theme_fix()
+    html = str(captured["html"])
+    assert "textarea" in html
+    assert "var(--text-color)" in html
+    assert captured["kwargs"] == {"height": 0, "scrolling": False}
