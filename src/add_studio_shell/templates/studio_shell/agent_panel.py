@@ -949,17 +949,42 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
                 if pending_image is not None and image_path:
                     st.image(pending_image["bytes"], caption="已附圖", use_container_width=True)
             with st.chat_message("assistant"):
+                reasoning_slot = st.empty()
                 placeholder = st.empty()
                 answer_parts: list[str] = []
+                reasoning_parts: list[str] = []
+                stream_ui: dict[str, Any] = {"reasoning_ph": None, "visible": False}
                 tts_settings = _build_tts_settings_for_playback()
                 if st.session_state.get("studio_tts_enabled") and tts_settings is None:
                     cfg = _load_tts_config()
                     if not str(cfg.get("api_key", "")).strip():
                         st.warning("語音已開啟，但 ~/.peas-agent/tts.json 尚未設定 api_key。")
 
+                def on_reasoning(token: str) -> None:
+                    reasoning_parts.append(token)
+                    text = "".join(reasoning_parts)
+                    if not text:
+                        return
+                    if not stream_ui["visible"]:
+                        stream_ui["visible"] = True
+                        with reasoning_slot.container():
+                            with st.expander("思考過程", expanded=False):
+                                stream_ui["reasoning_ph"] = st.empty()
+                    reasoning_ph = stream_ui["reasoning_ph"]
+                    if reasoning_ph is not None:
+                        reasoning_ph.markdown(text)
+
                 def on_token(token: str) -> None:
                     answer_parts.append(token)
                     placeholder.markdown("".join(answer_parts))
+
+                def on_stream_reset() -> None:
+                    reasoning_parts.clear()
+                    answer_parts.clear()
+                    stream_ui["reasoning_ph"] = None
+                    stream_ui["visible"] = False
+                    reasoning_slot.empty()
+                    placeholder.markdown("")
 
                 try:
                     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
@@ -969,6 +994,8 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
                             prompt,
                             image_path=image_path,
                             on_token=on_token,
+                            on_reasoning=on_reasoning,
+                            on_stream_reset=on_stream_reset,
                         )
                 except Exception as exc:
                     final_text = f"Agent 執行時發生錯誤：`{exc}`"

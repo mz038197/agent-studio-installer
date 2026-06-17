@@ -92,10 +92,15 @@ Studio and CLI share `~/.peas-agent/`:
     "api_key": "sk-...",
     "model": "gpt-5.4-mini",
     "temperature": 0.2,
-    "base_url": ""
+    "base_url": "",
+    "use_responses_api": true,
+    "output_version": "responses/v1",
+    "reasoning": { "effort": "medium", "summary": "auto" }
   }
 }
 ```
+
+`use_responses_api` enables OpenAI Responses API; the chat panel shows a collapsible **思考過程** expander while streaming (not saved to chat history). Set `use_responses_api` to `false` if your `base_url` proxy does not support `/v1/responses`. Missing keys are merged into an existing `config.json` on Agent start without overwriting your values.
 
 ## TTS settings
 
