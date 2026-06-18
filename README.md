@@ -102,6 +102,8 @@ Studio and CLI share `~/.peas-agent/`:
 
 `use_responses_api` enables OpenAI Responses API; the chat panel shows a collapsible **思考過程** expander while streaming (not saved to chat history). Set `use_responses_api` to `false` if your `base_url` proxy does not support `/v1/responses`. Missing keys are merged into an existing `config.json` on Agent start without overwriting your values.
 
+**Reasoning depth:** the right-side **推理深度** expander writes `llm.reasoning.effort` (`none` / `low` / `medium` / `high`) to `config.json`. When Agent Core is connected, each change calls `Agent.reload_llm_config()` so the next reply uses the new setting without re-enabling Agent. Requires `use_responses_api: true`.
+
 ## TTS settings
 
 TTS preferences are stored at `~/.peas-agent/tts.json` (not in the project). Default `voice`, `instructions`, and `speed` come from `openai-tts` `Settings()`; Studio adds `enabled` and `api_key`:

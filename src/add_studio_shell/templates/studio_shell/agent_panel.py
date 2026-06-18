@@ -24,6 +24,14 @@ SESSION_DIR = PEAS_WORKSPACE / "sessions"
 SCRIPTS_DIR = SHELL_ROOT / "scripts"
 CHAT_IMAGE_DIR = PEAS_WORKSPACE / "uploads" / "chat_images"
 TTS_CONFIG_PATH = PEAS_AGENT_HOME / "tts.json"
+LLM_CONFIG_PATH = PEAS_AGENT_HOME / "config.json"
+REASONING_EFFORT_OPTIONS = ("none", "low", "medium", "high")
+REASONING_EFFORT_LABELS = {
+    "none": "關閉 (none)",
+    "low": "快速 (low)",
+    "medium": "平衡 (medium)",
+    "high": "深度 (high)",
+}
 MIGRATION_MARKER_PATH = PEAS_AGENT_HOME / ".studio_migration_done"
 LEGACY_USER_SETTINGS_PATH = SHELL_ROOT / "workspace" / "user_settings.json"
 LEGACY_SESSION_DIR = SHELL_ROOT / "sessions"
@@ -327,6 +335,151 @@ def _render_tts_settings_ui(*, settings_error: str | None = None) -> None:
             "文字回答完成後才開始 TTS；語音錯誤不會影響文字顯示。"
         )
         persist_error = _persist_tts_preferences_if_changed()
+        if persist_error:
+            st.warning(persist_error)
+
+
+def _default_reasoning_config() -> dict[str, str]:
+    return {"effort": "medium", "summary": "auto"}
+
+
+def _read_llm_config() -> dict[str, object]:
+    if not LLM_CONFIG_PATH.is_file():
+        return {}
+    try:
+        raw = json.loads(LLM_CONFIG_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _normalize_reasoning_effort(value: object) -> str:
+    effort = str(value or "").strip().lower()
+    if effort in REASONING_EFFORT_OPTIONS:
+        return effort
+    return _default_reasoning_config()["effort"]
+
+
+def _load_reasoning_effort() -> str:
+    cfg = _read_llm_config()
+    llm = cfg.get("llm")
+    if not isinstance(llm, dict):
+        return _default_reasoning_config()["effort"]
+    reasoning = llm.get("reasoning")
+    if not isinstance(reasoning, dict):
+        return _default_reasoning_config()["effort"]
+    return _normalize_reasoning_effort(reasoning.get("effort"))
+
+
+def _load_use_responses_api() -> bool:
+    cfg = _read_llm_config()
+    llm = cfg.get("llm")
+    if not isinstance(llm, dict):
+        return True
+    return llm.get("use_responses_api") is not False
+
+
+def _save_reasoning_effort(effort: str) -> str | None:
+    normalized = _normalize_reasoning_effort(effort)
+    cfg = _read_llm_config()
+    llm = cfg.get("llm")
+    if not isinstance(llm, dict):
+        llm = {}
+        cfg["llm"] = llm
+    reasoning = llm.get("reasoning")
+    if not isinstance(reasoning, dict):
+        reasoning = dict(_default_reasoning_config())
+        llm["reasoning"] = reasoning
+    reasoning["effort"] = normalized
+    try:
+        LLM_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        LLM_CONFIG_PATH.write_text(
+            json.dumps(cfg, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    except OSError as exc:
+        return f"無法寫入 LLM 設定檔：{exc}"
+    return None
+
+
+def _reload_reasoning_llm_config(agent: Any) -> str | None:
+    reload = getattr(agent, "reload_llm_config", None)
+    if reload is None:
+        return "請先升級 peas-agent-core（需支援 Agent.reload_llm_config）。"
+    try:
+        reload()
+    except Exception as exc:
+        return f"套用推理深度失敗：`{exc}`"
+    return None
+
+
+def _apply_reasoning_effort_change(new_effort: str) -> str | None:
+    error = _save_reasoning_effort(new_effort)
+    if error:
+        return error
+    agent = st.session_state.get("studio_agent")
+    if agent is not None:
+        return _reload_reasoning_llm_config(agent)
+    return None
+
+
+def _reload_reasoning_preferences_from_file() -> None:
+    effort = _load_reasoning_effort()
+    st.session_state["studio_reasoning_effort"] = effort
+    st.session_state["_studio_reasoning_snapshot"] = effort
+
+
+def _persist_reasoning_effort_if_changed() -> str | None:
+    if "studio_reasoning_effort" not in st.session_state:
+        return None
+    previous = st.session_state.get("_studio_reasoning_snapshot")
+    if previous is None:
+        return None
+    current = _normalize_reasoning_effort(st.session_state.get("studio_reasoning_effort"))
+    if previous == current:
+        return None
+    reload_error = _apply_reasoning_effort_change(current)
+    if reload_error:
+        return reload_error
+    st.session_state["_studio_reasoning_snapshot"] = current
+    return None
+
+
+def _sync_reasoning_preferences_for_page(page_name: str) -> str | None:
+    persist_error = _persist_reasoning_effort_if_changed()
+    if persist_error is not None:
+        return persist_error
+    _reload_reasoning_preferences_from_file()
+    st.session_state["_studio_reasoning_page_name"] = page_name
+    return None
+
+
+def _prepare_reasoning_preferences(page_name: str) -> str | None:
+    return _sync_reasoning_preferences_for_page(page_name)
+
+
+def _render_reasoning_settings_ui(*, settings_error: str | None = None) -> None:
+    if settings_error:
+        st.warning(settings_error)
+
+    responses_enabled = _load_use_responses_api()
+    with st.expander("推理深度", expanded=False):
+        st.selectbox(
+            "推理深度",
+            REASONING_EFFORT_OPTIONS,
+            format_func=lambda value: REASONING_EFFORT_LABELS.get(value, value),
+            key="studio_reasoning_effort",
+            disabled=not responses_enabled,
+            help="控制 Responses API 的 reasoning.effort；切換後立即套用。",
+        )
+        if not responses_enabled:
+            st.caption("需於 config.json 啟用 use_responses_api 才有效。")
+        else:
+            st.caption(
+                "關閉 (none) 可加速回覆；若 API 回 400 請改回 low 或確認模型是否支援 none。"
+            )
+        st.caption(f"LLM 設定檔：`{LLM_CONFIG_PATH}`")
+        persist_error = _persist_reasoning_effort_if_changed()
         if persist_error:
             st.warning(persist_error)
 
@@ -849,11 +1002,13 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
             st.rerun()
 
     settings_error = _prepare_tts_preferences(page_name)
+    reasoning_error = _prepare_reasoning_preferences(page_name)
 
     current_session = st.session_state.get("session_name")
     if not current_session:
         st.caption("尚無對話紀錄，請按 **+** 新增對話。")
         _render_tts_settings_ui(settings_error=settings_error)
+        _render_reasoning_settings_ui(settings_error=reasoning_error)
         st.chat_input("詢問...", disabled=True, key="studio_chat_no_session")
         return
 
@@ -872,17 +1027,19 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
             else:
                 st.error(message)
         _render_tts_settings_ui(settings_error=settings_error)
+        _render_reasoning_settings_ui(settings_error=reasoning_error)
         st.chat_input("請先啟用 Agent...", disabled=True, key="studio_chat_not_activated")
         return
 
     with st.expander("技術資訊", expanded=False):
         st.caption(f"對話紀錄檔：{SESSION_DIR / current_session}")
         st.caption(f"語音設定檔：{TTS_CONFIG_PATH}")
-        st.caption(f"LLM 設定檔：{PEAS_AGENT_HOME / 'config.json'}")
+        st.caption(f"LLM 設定檔：{LLM_CONFIG_PATH}")
         if page_name:
             st.caption(f"目前頁面：{page_name}")
 
     _render_tts_settings_ui(settings_error=settings_error)
+    _render_reasoning_settings_ui(settings_error=reasoning_error)
 
     try:
         agent = _get_agent_for_session(current_session)

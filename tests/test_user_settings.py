@@ -491,3 +491,84 @@ def test_parse_history_entry_supports_legacy_two_tuple_entries(
         "hi",
         "think",
     )
+
+
+def test_save_reasoning_effort_updates_nested_key_only(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module = _load_agent_panel_module(monkeypatch, tmp_path)
+    config_path = tmp_path / "config.json"
+    monkeypatch.setattr(module, "LLM_CONFIG_PATH", config_path)
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        json.dumps(
+            {
+                "llm": {
+                    "api_key": "secret",
+                    "reasoning": {"effort": "medium", "summary": "auto"},
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert module._save_reasoning_effort("high") is None
+
+    on_disk = json.loads(config_path.read_text(encoding="utf-8"))
+    assert on_disk["llm"]["api_key"] == "secret"
+    assert on_disk["llm"]["reasoning"]["effort"] == "high"
+    assert on_disk["llm"]["reasoning"]["summary"] == "auto"
+
+
+def test_load_reasoning_effort_defaults_to_medium(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module = _load_agent_panel_module(monkeypatch, tmp_path)
+    config_path = tmp_path / "config.json"
+    monkeypatch.setattr(module, "LLM_CONFIG_PATH", config_path)
+
+    assert module._load_reasoning_effort() == "medium"
+
+
+def test_apply_reasoning_effort_change_calls_reload_when_agent_connected(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module = _load_agent_panel_module(monkeypatch, tmp_path)
+    config_path = tmp_path / "config.json"
+    monkeypatch.setattr(module, "LLM_CONFIG_PATH", config_path)
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        json.dumps({"llm": {"api_key": "k", "reasoning": {"effort": "medium"}}}),
+        encoding="utf-8",
+    )
+
+    calls: list[str] = []
+
+    class FakeAgent:
+        def reload_llm_config(self) -> None:
+            calls.append("reload")
+
+    module.st.session_state["studio_agent"] = FakeAgent()
+
+    assert module._apply_reasoning_effort_change("none") is None
+    assert calls == ["reload"]
+    assert json.loads(config_path.read_text(encoding="utf-8"))["llm"]["reasoning"]["effort"] == "none"
+
+
+def test_apply_reasoning_effort_change_skips_reload_without_agent(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module = _load_agent_panel_module(monkeypatch, tmp_path)
+    config_path = tmp_path / "config.json"
+    monkeypatch.setattr(module, "LLM_CONFIG_PATH", config_path)
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        json.dumps({"llm": {"reasoning": {"effort": "medium"}}}),
+        encoding="utf-8",
+    )
+
+    assert module._apply_reasoning_effort_change("low") is None
+    assert json.loads(config_path.read_text(encoding="utf-8"))["llm"]["reasoning"]["effort"] == "low"
