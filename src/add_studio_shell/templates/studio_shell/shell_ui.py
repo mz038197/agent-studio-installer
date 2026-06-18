@@ -61,9 +61,7 @@ _MULTIMODAL_CHATINPUT_THEME_FIX = """
 
 def inject_multimodal_chatinput_theme_fix() -> None:
     """st-multimodal-chatinput hardcodes white textarea text; fix for light themes."""
-    import streamlit.components.v1 as components
-
-    components.html(_MULTIMODAL_CHATINPUT_THEME_FIX, height=0, scrolling=False)
+    st.iframe(_MULTIMODAL_CHATINPUT_THEME_FIX, height=0)
 
 
 def inject_style() -> None:

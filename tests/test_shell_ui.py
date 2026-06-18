@@ -80,19 +80,14 @@ def test_inject_multimodal_chatinput_theme_fix_targets_textarea_color(
 ) -> None:
     captured: dict[str, object] = {}
 
-    def fake_html(html: str, **kwargs: object) -> None:
-        captured["html"] = html
+    def fake_iframe(src: str, **kwargs: object) -> None:
+        captured["src"] = src
         captured["kwargs"] = kwargs
 
-    fake_components_v1 = types.SimpleNamespace(html=fake_html)
-    fake_components_pkg = types.ModuleType("streamlit.components")
-    fake_components_pkg.v1 = fake_components_v1
     fake_streamlit = types.ModuleType("streamlit")
     fake_streamlit.markdown = lambda *_a, **_k: None
-    fake_streamlit.components = fake_components_pkg
+    fake_streamlit.iframe = fake_iframe
     monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
-    monkeypatch.setitem(sys.modules, "streamlit.components", fake_components_pkg)
-    monkeypatch.setitem(sys.modules, "streamlit.components.v1", fake_components_v1)
 
     module_path = (
         Path(__file__).parents[1]
@@ -109,7 +104,7 @@ def test_inject_multimodal_chatinput_theme_fix_targets_textarea_color(
     spec.loader.exec_module(module)
 
     module.inject_multimodal_chatinput_theme_fix()
-    html = str(captured["html"])
+    html = str(captured["src"])
     assert "textarea" in html
     assert "var(--text-color)" in html
-    assert captured["kwargs"] == {"height": 0, "scrolling": False}
+    assert captured["kwargs"] == {"height": 0}
