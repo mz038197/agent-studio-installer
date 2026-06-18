@@ -470,7 +470,24 @@ def test_assistant_reply_is_saved_before_tts_playback() -> None:
     ).read_text(encoding="utf-8")
     user_message_flow = source.split("if should_process_submission:", 1)[1]
 
-    save_index = user_message_flow.index('st.session_state["studio_chat_history"].append(("assistant", answer))')
+    save_index = user_message_flow.index(
+        'st.session_state["studio_chat_history"].append(\n'
+        '                    ("assistant", answer, reasoning_text)\n'
+        '                )'
+    )
     tts_index = user_message_flow.index("stream_tts_play(answer, tts_settings)")
 
     assert save_index < tts_index
+
+
+def test_parse_history_entry_supports_legacy_two_tuple_entries(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module = _load_agent_panel_module(monkeypatch, tmp_path)
+
+    assert module._parse_history_entry(("user", "hello")) == ("user", "hello", "")
+    assert module._parse_history_entry(("assistant", "hi", "think")) == (
+        "assistant",
+        "hi",
+        "think",
+    )

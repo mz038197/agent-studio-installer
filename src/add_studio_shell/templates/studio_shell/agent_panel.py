@@ -661,6 +661,21 @@ def _load_session_history(path: Path) -> list[tuple[str, str]]:
     return history
 
 
+def _parse_history_entry(entry: tuple[str, ...]) -> tuple[str, str, str]:
+    role = entry[0]
+    text = entry[1] if len(entry) > 1 else ""
+    reasoning = entry[2] if len(entry) > 2 else ""
+    return role, text, reasoning
+
+
+def _render_history_message(role: str, text: str, *, reasoning: str = "") -> None:
+    with st.chat_message(role):
+        if role == "assistant" and reasoning.strip():
+            with st.expander("思考過程", expanded=False):
+                st.markdown(reasoning)
+        st.markdown(text)
+
+
 def _set_current_session(path: Path) -> None:
     session_name = _session_name(path)
     st.session_state["session_name"] = session_name
@@ -777,6 +792,7 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
             (
                 "assistant",
                 "請先按「啟用 Agent」。啟用後，我會讀取左欄傳來的頁面狀態，再回答你的問題。",
+                "",
             )
         ]
 
@@ -885,9 +901,9 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
 
     chat = st.container(height=460, border=False)
     with chat:
-        for role, text in st.session_state["studio_chat_history"]:
-            with st.chat_message(role):
-                st.markdown(text)
+        for entry in st.session_state["studio_chat_history"]:
+            role, text, reasoning = _parse_history_entry(entry)
+            _render_history_message(role, text, reasoning=reasoning)
 
     st.caption("輸入文字後 Enter 送出；可 Ctrl+V 貼圖，或點輸入框內圖片按鈕選檔（PNG/JPG/WEBP，上限 5 MB）。")
     chatinput = multimodal_chatinput(
@@ -932,7 +948,7 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
             attachment_note = user_text or "（已附圖，未輸入文字）"
             display_user_text = f"{attachment_note}\n\n（已附圖：{image_path}）"
 
-        st.session_state["studio_chat_history"].append(("user", display_user_text))
+        st.session_state["studio_chat_history"].append(("user", display_user_text, ""))
 
         prompt_user_text = user_text or "（使用者只附上圖片，未輸入文字）"
         if extra_context.strip():
@@ -1004,7 +1020,10 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
                 else:
                     answer = "".join(answer_parts).strip() or final_text.strip()
 
-                st.session_state["studio_chat_history"].append(("assistant", answer))
+                reasoning_text = "".join(reasoning_parts).strip()
+                st.session_state["studio_chat_history"].append(
+                    ("assistant", answer, reasoning_text)
+                )
                 if tts_settings is not None and answer:
                     try:
                         stream_tts_play(answer, tts_settings)
