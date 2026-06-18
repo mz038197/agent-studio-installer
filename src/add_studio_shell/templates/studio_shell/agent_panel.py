@@ -814,6 +814,46 @@ def _load_session_history(path: Path) -> list[tuple[str, str]]:
     return history
 
 
+REASONING_ROUND_SEPARATOR = "\n\n---\n\n"
+TOOL_RUN_PLACEHOLDER = "（執行工具中…）"
+
+
+def _commit_reasoning_round(segments: list[str], current_parts: list[str]) -> None:
+    text = "".join(current_parts).strip()
+    if text:
+        segments.append(text)
+    current_parts.clear()
+
+
+def _merged_reasoning_text(segments: list[str], current_parts: list[str]) -> str:
+    parts = [segment for segment in segments if segment.strip()]
+    current = "".join(current_parts).strip()
+    if current:
+        parts.append(current)
+    return REASONING_ROUND_SEPARATOR.join(parts)
+
+
+def _render_reasoning_expander(
+    reasoning_slot: Any,
+    text: str,
+    *,
+    expanded: bool,
+    stream_ui: dict[str, Any],
+) -> None:
+    if not text.strip():
+        return
+    stream_ui["visible"] = True
+    stream_ui["expanded"] = expanded
+    with reasoning_slot.container():
+        with st.expander("思考過程", expanded=expanded):
+            if expanded:
+                stream_ui["reasoning_ph"] = st.empty()
+                stream_ui["reasoning_ph"].markdown(text)
+            else:
+                stream_ui["reasoning_ph"] = None
+                st.markdown(text)
+
+
 def _parse_history_entry(entry: tuple[str, ...]) -> tuple[str, str, str]:
     role = entry[0]
     text = entry[1] if len(entry) > 1 else ""
@@ -1125,39 +1165,74 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
                 reasoning_slot = st.empty()
                 placeholder = st.empty()
                 answer_parts: list[str] = []
+                reasoning_segments: list[str] = []
                 reasoning_parts: list[str] = []
-                stream_ui: dict[str, Any] = {"reasoning_ph": None, "visible": False}
+                stream_ui: dict[str, Any] = {
+                    "reasoning_ph": None,
+                    "visible": False,
+                    "expanded": False,
+                    "answer_started": False,
+                }
                 tts_settings = _build_tts_settings_for_playback()
                 if st.session_state.get("studio_tts_enabled") and tts_settings is None:
                     cfg = _load_tts_config()
                     if not str(cfg.get("api_key", "")).strip():
                         st.warning("語音已開啟，但 ~/.peas-agent/tts.json 尚未設定 api_key。")
 
-                def on_reasoning(token: str) -> None:
-                    reasoning_parts.append(token)
-                    text = "".join(reasoning_parts)
+                def _sync_reasoning_ui() -> None:
+                    text = _merged_reasoning_text(reasoning_segments, reasoning_parts)
                     if not text:
                         return
-                    if not stream_ui["visible"]:
-                        stream_ui["visible"] = True
-                        with reasoning_slot.container():
-                            with st.expander("思考過程", expanded=False):
-                                stream_ui["reasoning_ph"] = st.empty()
-                    reasoning_ph = stream_ui["reasoning_ph"]
-                    if reasoning_ph is not None:
-                        reasoning_ph.markdown(text)
+                    expanded = not stream_ui["answer_started"]
+                    if expanded:
+                        if not stream_ui["visible"] or not stream_ui["expanded"]:
+                            _render_reasoning_expander(
+                                reasoning_slot,
+                                text,
+                                expanded=True,
+                                stream_ui=stream_ui,
+                            )
+                        elif stream_ui["reasoning_ph"] is not None:
+                            stream_ui["reasoning_ph"].markdown(text)
+                        else:
+                            _render_reasoning_expander(
+                                reasoning_slot,
+                                text,
+                                expanded=True,
+                                stream_ui=stream_ui,
+                            )
+                    else:
+                        _render_reasoning_expander(
+                            reasoning_slot,
+                            text,
+                            expanded=False,
+                            stream_ui=stream_ui,
+                        )
+
+                def on_reasoning(token: str) -> None:
+                    reasoning_parts.append(token)
+                    _sync_reasoning_ui()
 
                 def on_token(token: str) -> None:
+                    if not stream_ui["answer_started"]:
+                        stream_ui["answer_started"] = True
+                        _sync_reasoning_ui()
                     answer_parts.append(token)
                     placeholder.markdown("".join(answer_parts))
 
                 def on_stream_reset() -> None:
-                    reasoning_parts.clear()
+                    _commit_reasoning_round(reasoning_segments, reasoning_parts)
                     answer_parts.clear()
-                    stream_ui["reasoning_ph"] = None
-                    stream_ui["visible"] = False
-                    reasoning_slot.empty()
-                    placeholder.markdown("")
+                    stream_ui["answer_started"] = False
+                    placeholder.markdown(TOOL_RUN_PLACEHOLDER)
+                    merged = _merged_reasoning_text(reasoning_segments, reasoning_parts)
+                    if merged:
+                        _render_reasoning_expander(
+                            reasoning_slot,
+                            merged,
+                            expanded=True,
+                            stream_ui=stream_ui,
+                        )
 
                 try:
                     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
@@ -1177,7 +1252,8 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
                 else:
                     answer = "".join(answer_parts).strip() or final_text.strip()
 
-                reasoning_text = "".join(reasoning_parts).strip()
+                _commit_reasoning_round(reasoning_segments, reasoning_parts)
+                reasoning_text = _merged_reasoning_text(reasoning_segments, [])
                 st.session_state["studio_chat_history"].append(
                     ("assistant", answer, reasoning_text)
                 )
