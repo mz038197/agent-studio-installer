@@ -107,4 +107,4 @@ def test_inject_multimodal_chatinput_theme_fix_targets_textarea_color(
     html = str(captured["src"])
     assert "textarea" in html
     assert "var(--text-color)" in html
-    assert captured["kwargs"] == {"height": 0}
+    assert captured["kwargs"] == {"height": module._THEME_FIX_IFRAME_HEIGHT}
