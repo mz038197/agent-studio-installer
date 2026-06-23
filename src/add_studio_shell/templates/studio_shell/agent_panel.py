@@ -70,6 +70,8 @@ TTS_VOICE_LABELS: dict[str, str] = {
 }
 LEGACY_HARDCODED_TTS_INSTRUCTIONS = "用台灣繁體中文說話。"
 LEGACY_HARDCODED_TTS_SPEED = 1.0
+DEFAULT_TTS_BASE_URL = "https://ai.vanscoding.com/v1"
+DEFAULT_TTS_MODEL = "openai@gpt-4o-mini-tts"
 
 
 def _tts_voice_label(voice_id: str) -> str:
@@ -92,7 +94,8 @@ def _default_tts_config() -> dict[str, object]:
     env = Settings()
     return {
         "api_key": "",
-        "base_url": "",
+        "base_url": DEFAULT_TTS_BASE_URL,
+        "model": DEFAULT_TTS_MODEL,
         "enabled": False,
         "voice": env.voice,
         "instructions": env.instructions,
@@ -138,10 +141,13 @@ def _normalize_tts_config(
     enabled = raw.get("enabled", raw.get("tts_enabled", defaults["enabled"]))
     instructions = raw.get("instructions", raw.get("tts_instructions", defaults["instructions"]))
     instructions = str(instructions).strip() or str(defaults["instructions"])
+    base_url = str(raw.get("base_url", defaults["base_url"])).strip() or str(defaults["base_url"])
+    model = str(raw.get("model", defaults["model"])).strip() or str(defaults["model"])
 
     return {
         "api_key": str(raw.get("api_key", defaults["api_key"])),
-        "base_url": str(raw.get("base_url", defaults["base_url"])),
+        "base_url": base_url,
+        "model": model,
         "enabled": bool(enabled),
         "voice": voice,
         "instructions": instructions,
@@ -211,7 +217,8 @@ def _config_from_tts_widgets() -> dict[str, object]:
     current = _load_tts_config()
     return {
         "api_key": current.get("api_key", ""),
-        "base_url": current.get("base_url", ""),
+        "base_url": current.get("base_url", DEFAULT_TTS_BASE_URL),
+        "model": current.get("model", DEFAULT_TTS_MODEL),
         "enabled": bool(st.session_state.get("studio_tts_enabled", False)),
         "voice": str(st.session_state.get("studio_tts_voice", "")),
         "instructions": str(st.session_state.get("studio_tts_instructions", "")),
@@ -283,9 +290,15 @@ def _build_tts_settings_for_playback() -> Settings | None:
     api_key = str(cfg.get("api_key", "")).strip()
     if not api_key:
         return None
+    model = str(cfg.get("model", "")).strip()
+    if not model or "@" not in model:
+        return None
+    base_url = str(cfg.get("base_url", "")).strip()
     return replace(
         Settings(),
         api_key=api_key,
+        base_url=base_url,
+        model=model,
         voice=str(st.session_state["studio_tts_voice"]),
         instructions=str(st.session_state["studio_tts_instructions"]).strip()
         or Settings().instructions,
@@ -1178,6 +1191,11 @@ def render_chat_panel(*, extra_context: str = "", page_name: str = "") -> None:
                     cfg = _load_tts_config()
                     if not str(cfg.get("api_key", "")).strip():
                         st.warning("語音已開啟，但 ~/.peas-agent/tts.json 尚未設定 api_key。")
+                    elif "@" not in str(cfg.get("model", "")).strip():
+                        st.warning(
+                            "語音已開啟，但 tts.json 的 model 必須使用 router 格式，"
+                            f"例如 `{DEFAULT_TTS_MODEL}`。"
+                        )
 
                 def _sync_reasoning_ui() -> None:
                     text = _merged_reasoning_text(reasoning_segments, reasoning_parts)

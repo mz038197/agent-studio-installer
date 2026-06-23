@@ -17,6 +17,8 @@ class _FakeSettings:
     DEFAULT_VOICE = "nova"
 
     api_key: str = ""
+    base_url: str = ""
+    model: str = "openai@gpt-4o-mini-tts"
     voice: str = DEFAULT_VOICE
     instructions: str = DEFAULT_INSTRUCTIONS
     speed: float = DEFAULT_SPEED
@@ -27,7 +29,8 @@ def _expected_default_tts_config() -> dict[str, object]:
     env = _FakeSettings()
     return {
         "api_key": "",
-        "base_url": "",
+        "base_url": "https://ai.vanscoding.com/v1",
+        "model": "openai@gpt-4o-mini-tts",
         "enabled": False,
         "voice": env.voice,
         "instructions": env.instructions,
@@ -227,6 +230,37 @@ def test_agent_panel_upgrades_legacy_hardcoded_tts_config(
     assert payload["enabled"] is True
 
 
+def test_agent_panel_merges_missing_router_tts_fields(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module = _load_agent_panel_module(monkeypatch, tmp_path)
+    settings_path = tmp_path / ".peas-agent" / "tts.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(
+        json.dumps(
+            {
+                "api_key": "vcr_sk_test",
+                "enabled": True,
+                "voice": "nova",
+                "instructions": module._default_tts_config()["instructions"],
+                "speed": 1.25,
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    message = module._ensure_tts_config_file()
+
+    assert message is None
+    payload = json.loads(settings_path.read_text(encoding="utf-8"))
+    expected = _expected_default_tts_config()
+    assert payload["api_key"] == "vcr_sk_test"
+    assert payload["enabled"] is True
+    assert payload["base_url"] == expected["base_url"]
+    assert payload["model"] == expected["model"]
+
+
 def test_normalize_tts_config_empty_instructions_falls_back_to_default(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -391,6 +425,7 @@ def test_build_tts_settings_for_playback_passes_api_key_only(
             {
                 "api_key": "sk-test",
                 "base_url": "https://example.com/v1",
+                "model": "openai@gpt-4o-mini-tts",
                 "enabled": True,
                 "voice": "alloy",
                 "instructions": "test",
@@ -409,6 +444,8 @@ def test_build_tts_settings_for_playback_passes_api_key_only(
 
     assert result is not None
     assert result.api_key == "sk-test"
+    assert result.base_url == "https://example.com/v1"
+    assert result.model == "openai@gpt-4o-mini-tts"
     assert result.voice == "alloy"
     assert result.instructions == "test"
     assert result.speed == 1.0

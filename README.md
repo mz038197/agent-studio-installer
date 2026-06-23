@@ -71,7 +71,7 @@ Studio and CLI share `~/.peas-agent/`:
 ```text
 ~/.peas-agent/
 ├── config.json          # LLM: api_key, model, temperature, base_url
-├── tts.json             # TTS: api_key, voice, instructions, speed
+├── tts.json             # TTS: api_key, base_url, model, voice, instructions, speed
 └── workspace/
     ├── sessions/        # chat history (*.jsonl)
     ├── memory/
@@ -106,12 +106,13 @@ Studio and CLI share `~/.peas-agent/`:
 
 ## TTS settings
 
-TTS preferences are stored at `~/.peas-agent/tts.json` (not in the project). Default `voice`, `instructions`, and `speed` come from `openai-tts` `Settings()`; Studio adds `enabled` and `api_key`:
+TTS preferences are stored at `~/.peas-agent/tts.json` (not in the project). Default `voice`, `instructions`, and `speed` come from `openai-tts` `Settings()`; Studio adds `enabled`, `api_key`, `base_url`, and `model`:
 
 ```json
 {
   "api_key": "",
-  "base_url": "",
+  "base_url": "https://ai.vanscoding.com/v1",
+  "model": "openai@gpt-4o-mini-tts",
   "enabled": false,
   "voice": "nova",
   "instructions": "<openai-tts DEFAULT_TTS_INSTRUCTIONS>",
@@ -119,7 +120,7 @@ TTS preferences are stored at `~/.peas-agent/tts.json` (not in the project). Def
 }
 ```
 
-`base_url` is reserved for future use; TTS playback currently uses the OpenAI default endpoint only.
+On first Studio start (or after `add-studio-shell --update`), missing keys in an existing `tts.json` are merged without overwriting your `api_key`, `voice`, or other saved values. Local router dev can use `http://127.0.0.1:8000/v1` for `base_url`.
 
 The right-side panel reads and writes this file. TTS uses **only** `tts.json` — no fallback to `config.json` or project `.env`.
 
